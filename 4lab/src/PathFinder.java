@@ -12,19 +12,41 @@ public class PathFinder {
         return number % 2 != 0;
     }
 
-    // Печатает дерево: каждый следующий уровень сдвинут вправо на 4 пробела.
-    // node — текущая вершина; depth — её глубина (у корня 0).
-    public static void printTree(TreeNode node, int depth) {
-        if (node == null) {
+    // Печатает ВСЁ дерево целиком в виде схемы с ветками. Пример:
+    // 1
+    // +-- 3
+    // |   +-- 7
+    // |   \-- 9
+    // \-- 4
+    // Корень печатается первой строкой, потом по очереди все его поддеревья.
+    // root — корень дерева.
+    public static void printTree(TreeNode root) {
+        if (root == null) {
+            System.out.println("(дерево пустое)");
             return;
         }
-        for (int i = 0; i < depth; i++) {
-            System.out.print("    ");
-        }
-        System.out.println(node.value);
+        System.out.println(root.value);
+        printChildren(root, "");
+    }
 
+    // Печатает всех детей вершины node, каждого на своей строке, и рекурсивно их детей.
+    // prefix — начало строки: вертикальные линии и пробелы от предков.
+    // Последнего ребёнка рисуем знаком \-- (ветка заканчивается),
+    // остальных знаком +-- (ниже есть ещё дети).
+    private static void printChildren(TreeNode node, String prefix) {
         for (int i = 0; i < node.childCount; i++) {
-            printTree(node.children[i], depth + 1);
+            TreeNode child = node.children[i];
+            boolean isLast = (i == node.childCount - 1);
+
+            if (isLast) {
+                System.out.println(prefix + "\\-- " + child.value);
+                // Под последним ребёнком вертикальная линия уже не нужна, ставим пробелы.
+                printChildren(child, prefix + "    ");
+            } else {
+                System.out.println(prefix + "+-- " + child.value);
+                // Под не последним ребёнком линия продолжается вниз к его братьям.
+                printChildren(child, prefix + "|   ");
+            }
         }
     }
 

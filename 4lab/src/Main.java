@@ -42,8 +42,9 @@ public class Main {
         node5.addChild(new TreeNode(13));
         node5.addChild(new TreeNode(6));
 
-        System.out.println("\nДерево 1:");
-        PathFinder.printTree(root, 0);
+        // Сначала печатаем дерево целиком, потом ищем путь.
+        System.out.println("\nДерево 1 (полностью):");
+        PathFinder.printTree(root);
         System.out.println();
         PathFinder.findLongestOddPath(root);
 
@@ -52,8 +53,8 @@ public class Main {
         evenRoot.addChild(new TreeNode(4));
         evenRoot.addChild(new TreeNode(6));
 
-        System.out.println("\nДерево 2:");
-        PathFinder.printTree(evenRoot, 0);
+        System.out.println("\nДерево 2 (полностью):");
+        PathFinder.printTree(evenRoot);
         System.out.println();
         PathFinder.findLongestOddPath(evenRoot);
     }
