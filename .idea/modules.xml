@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+      <module fileurl="file://$PROJECT_DIR$/1lab/1lab.iml" filepath="$PROJECT_DIR$/1lab/1lab.iml" />
+      <module fileurl="file://$PROJECT_DIR$/2lab/2lab.iml" filepath="$PROJECT_DIR$/2lab/2lab.iml" />
+      <module fileurl="file://$PROJECT_DIR$/3lab/3lab.iml" filepath="$PROJECT_DIR$/3lab/3lab.iml" />
+      <module fileurl="file://$PROJECT_DIR$/4lab/4lab.iml" filepath="$PROJECT_DIR$/4lab/4lab.iml" />
+      <module fileurl="file://$PROJECT_DIR$/5lab/5lab.iml" filepath="$PROJECT_DIR$/5lab/5lab.iml" />
+      <module fileurl="file://$PROJECT_DIR$/6lab/6lab.iml" filepath="$PROJECT_DIR$/6lab/6lab.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/ASDser.iml" filepath="$PROJECT_DIR$/.idea/ASDser.iml" />
+    </modules>
+  </component>
+</project>
