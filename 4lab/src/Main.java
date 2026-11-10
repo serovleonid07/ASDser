@@ -4,43 +4,65 @@
  */
 public class Main {
     // Точка входа программы. Аргумент args не используется.
-    // Строит два дерева, печатает их и ищет в каждом самый длинный нечётный путь.
+    // Строит два дерева, печатает их целиком и ищет в каждом самый длинный нечётный путь.
     public static void main(String[] args) {
         System.out.println("Лабораторная № 4. Рекурсия. N-деревья.");
 
         // ---------- Первое дерево ----------
-        // Корень 1 и три ребёнка: 3, 4, 5.
+        // Имя переменной показывает путь до вершины: v3_7_5 — это вершина 5,
+        // которая лежит под 7, а та под 3, а 3 под корнем.
         TreeNode root = new TreeNode(1);
-        TreeNode node3 = new TreeNode(3);
-        TreeNode node4 = new TreeNode(4);
-        TreeNode node5 = new TreeNode(5);
-        root.addChild(node3);
-        root.addChild(node4);
-        root.addChild(node5);
 
-        // Дети вершины 3: 7, 9, 2.
-        TreeNode node7 = new TreeNode(7);
-        TreeNode node9 = new TreeNode(9);
-        node3.addChild(node7);
-        node3.addChild(node9);
-        node3.addChild(new TreeNode(2));
+        // Четыре ребёнка корня: 3, 4, 5, 8.
+        TreeNode v3 = add(root, 3);
+        TreeNode v4 = add(root, 4);
+        TreeNode v5 = add(root, 5);
+        TreeNode v8 = add(root, 8);
 
-        // Дети вершины 7: 5 и 8.
-        TreeNode node5low = new TreeNode(5);
-        node7.addChild(node5low);
-        node7.addChild(new TreeNode(8));
+        // Ветка 3: здесь самый длинный нечётный путь.
+        TreeNode v3_7 = add(v3, 7);
+        TreeNode v3_7_5 = add(v3_7, 5);
+        TreeNode v3_7_5_11 = add(v3_7_5, 11);
+        TreeNode v3_7_5_11_17 = add(v3_7_5_11, 17);
+        add(v3_7_5_11_17, 19);
+        add(v3_7_5_11_17, 20);
+        add(v3_7_5_11, 6);
+        TreeNode v3_7_5_9 = add(v3_7_5, 9);
+        add(v3_7_5_9, 4);
+        TreeNode v3_7_8 = add(v3_7, 8);
+        TreeNode v3_7_8_13 = add(v3_7_8, 13);
+        add(v3_7_8_13, 15);
 
-        // Вершина 5 (под семёркой) ведёт дальше к 11, а у 11 дети 17 и 6.
-        TreeNode node11 = new TreeNode(11);
-        node5low.addChild(node11);
-        node11.addChild(new TreeNode(17));
-        node11.addChild(new TreeNode(6));
+        TreeNode v3_9 = add(v3, 9);
+        TreeNode v3_9_13 = add(v3_9, 13);
+        add(v3_9_13, 21);
+        add(v3_9_13, 2);
+        TreeNode v3_9_10 = add(v3_9, 10);
+        add(v3_9_10, 25);
 
-        // Остальные ветки.
-        node9.addChild(new TreeNode(13));
-        node4.addChild(new TreeNode(11));  // под чётной 4: путь начнётся только с 11
-        node5.addChild(new TreeNode(13));
-        node5.addChild(new TreeNode(6));
+        TreeNode v3_2 = add(v3, 2);
+        TreeNode v3_2_7 = add(v3_2, 7);
+        add(v3_2_7, 9);
+
+        // Ветка 4: сама вершина 4 чётная, поэтому путь тут может начаться только с 11.
+        TreeNode v4_11 = add(v4, 11);
+        TreeNode v4_11_15 = add(v4_11, 15);
+        TreeNode v4_11_15_17 = add(v4_11_15, 17);
+        TreeNode v4_11_15_17_23 = add(v4_11_15_17, 23);
+        add(v4_11_15_17_23, 27);
+        add(v4, 6);
+
+        // Ветка 5.
+        TreeNode v5_13 = add(v5, 13);
+        add(v5_13, 7);
+        TreeNode v5_12 = add(v5, 12);
+        add(v5_12, 3);
+        add(v5, 9);
+
+        // Ветка 8: начинается с чётной вершины.
+        TreeNode v8_21 = add(v8, 21);
+        TreeNode v8_21_33 = add(v8_21, 33);
+        add(v8_21_33, 35);
 
         // Сначала печатаем дерево целиком, потом ищем путь.
         System.out.println("\nДерево 1 (полностью):");
@@ -50,12 +72,22 @@ public class Main {
 
         // ---------- Второе дерево: все вершины чётные ----------
         TreeNode evenRoot = new TreeNode(2);
-        evenRoot.addChild(new TreeNode(4));
-        evenRoot.addChild(new TreeNode(6));
+        TreeNode even4 = add(evenRoot, 4);
+        add(evenRoot, 6);
+        add(even4, 8);
+        add(even4, 10);
 
         System.out.println("\nДерево 2 (полностью):");
         PathFinder.printTree(evenRoot);
         System.out.println();
         PathFinder.findLongestOddPath(evenRoot);
+    }
+
+    // Создаёт вершину со значением value, делает её ребёнком вершины parent
+    // и возвращает созданную вершину, чтобы к ней можно было добавлять своих детей.
+    private static TreeNode add(TreeNode parent, int value) {
+        TreeNode child = new TreeNode(value);
+        parent.addChild(child);
+        return child;
     }
 }
