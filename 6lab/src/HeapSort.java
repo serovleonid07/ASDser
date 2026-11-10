@@ -42,7 +42,8 @@ public class HeapSort {
     }
 
     // Сортирует массив data по возрастанию.
-    // showSteps — если true, печатает массив после построения пирамиды и после каждого шага.
+    // showSteps — если true, после построения пирамиды и после каждого шага печатает
+    // массив строкой и пирамиду схемой.
     public static void sort(int[] data, boolean showSteps) {
         int n = data.length;
 
@@ -78,13 +79,27 @@ public class HeapSort {
 
     // Печатает массив одной строкой. title — подпись.
     public static void printArray(String title, int[] data) {
-        printStep(title, data, data.length);
+        printLine(title, data, data.length);
     }
 
-    // Печатает массив и вертикальной чертой отделяет пирамиду от уже отсортированного хвоста.
+    // Печатает весь массив в виде пирамиды (дерева по уровням). title — подпись.
+    // Нужна, чтобы показать, как выглядит дерево, даже если массив ещё не стал пирамидой.
+    public static void printAsPyramid(String title, int[] data) {
+        System.out.println(title + ":");
+        printPyramid(data, data.length);
+    }
+
+    // Печатает один шаг сортировки: строку с массивом и под ней пирамиду.
     // heapSize — сколько первых элементов входит в пирамиду.
-    // Всё, что справа от черты, уже стоит на своём окончательном месте.
     private static void printStep(String title, int[] data, int heapSize) {
+        printLine(title, data, heapSize);
+        printPyramid(data, heapSize);
+        System.out.println();
+    }
+
+    // Печатает массив строкой и вертикальной чертой отделяет пирамиду от отсортированного хвоста.
+    // Всё, что справа от черты, уже стоит на своём окончательном месте.
+    private static void printLine(String title, int[] data, int heapSize) {
         System.out.print(title + ": ");
         for (int i = 0; i < data.length; i++) {
             if (i == heapSize) {
@@ -93,5 +108,64 @@ public class HeapSort {
             System.out.print(data[i] + " ");
         }
         System.out.println();
+    }
+
+    // Рисует первые heapSize элементов массива в виде пирамиды.
+    // Уровень 0 — один элемент (вершина), уровень 1 — два, уровень 2 — четыре и так далее:
+    // на каждом уровне элементов в два раза больше. Каждый уровень печатается отдельной строкой.
+    // Чтобы получилась пирамида, каждый элемент стоит по центру своего «участка» строки:
+    // нижний уровень делится на много узких участков, верхние на меньшее число широких.
+    private static void printPyramid(int[] data, int heapSize) {
+        if (heapSize == 0) {
+            return;
+        }
+
+        // Ширина самого длинного числа (с минусом), чтобы числа не слипались.
+        int maxLength = 1;
+        for (int i = 0; i < heapSize; i++) {
+            int length = String.valueOf(data[i]).length();
+            if (length > maxLength) {
+                maxLength = length;
+            }
+        }
+        int cellWidth = maxLength + 2;  // одно число вместе с отступами по бокам
+
+        // Считаем, сколько уровней нужно: на уровне k помещается 2^k элементов.
+        int levels = 0;
+        int placed = 0;     // сколько элементов уже поместили в уровни
+        int levelSize = 1;  // сколько элементов на текущем уровне
+        while (placed < heapSize) {
+            placed += levelSize;
+            levelSize *= 2;
+            levels++;
+        }
+
+        // Ширина строки равна ширине нижнего уровня, если бы он был заполнен полностью.
+        int totalWidth = cellWidth * (1 << (levels - 1));
+
+        int index = 0;  // номер элемента массива, который печатаем следующим
+        levelSize = 1;
+        for (int level = 0; level < levels; level++) {
+            int slotWidth = totalWidth / levelSize;  // ширина участка одного элемента на этом уровне
+            String line = "";
+            for (int i = 0; i < levelSize && index < heapSize; i++) {
+                String text = String.valueOf(data[index]);
+                int leftSpaces = (slotWidth - text.length()) / 2;
+                int rightSpaces = slotWidth - text.length() - leftSpaces;
+                line = line + spaces(leftSpaces) + text + spaces(rightSpaces);
+                index++;
+            }
+            System.out.println("  " + line);
+            levelSize *= 2;
+        }
+    }
+
+    // Возвращает строку из count пробелов.
+    private static String spaces(int count) {
+        String result = "";
+        for (int i = 0; i < count; i++) {
+            result = result + " ";
+        }
+        return result;
     }
 }

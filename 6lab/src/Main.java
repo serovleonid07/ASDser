@@ -12,7 +12,13 @@ public class Main {
 
         System.out.println();
         HeapSort.printArray("Исходный массив", data);
-        System.out.println("\nХод сортировки (слева от | пирамида, справа готовая часть):");
+
+        // Тот же массив, нарисованный как дерево. Пока это ещё не пирамида:
+        // у родителей бывают дети больше них.
+        System.out.println();
+        HeapSort.printAsPyramid("Исходный массив в виде дерева", data);
+
+        System.out.println("\nХод сортировки (слева от | пирамида, справа готовая часть):\n");
         HeapSort.sort(data, true);
 
         System.out.println();
