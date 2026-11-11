@@ -21,6 +21,7 @@ public class GameWindow extends JFrame {
     private static final int DEPTH_HARD = 7;
 
     private final GameController controller = new GameController();
+    private final CursorSet cursors = new CursorSet();   // курсоры лисы и гуся
     private final BoardPanel boardPanel;
     private final JLabel statusLabel = new JLabel();
     private final Timer computerTimer;          // таймер: даёт окну перерисоваться перед ходом компьютера
@@ -31,7 +32,7 @@ public class GameWindow extends JFrame {
         super("Лиса и гуси");
         setDefaultCloseOperation(EXIT_ON_CLOSE);
 
-        boardPanel = new BoardPanel(controller, this::afterChange);
+        boardPanel = new BoardPanel(controller, cursors, this::afterChange);
         add(boardPanel, BorderLayout.CENTER);
 
         statusLabel.setFont(statusLabel.getFont().deriveFont(Font.PLAIN, 15f));
@@ -124,12 +125,20 @@ public class GameWindow extends JFrame {
     // Вызывается после любого изменения: обновляет строку состояния и запускает компьютер, если его ход.
     private void afterChange() {
         updateStatus();
+        updateCursor();
         if (controller.isComputerTurn()) {
             computerTimer.restart();
         } else if (controller.isGameOver() && !resultShown) {
             resultShown = true;
             JOptionPane.showMessageDialog(this, resultText(), "Игра окончена", JOptionPane.INFORMATION_MESSAGE);
         }
+    }
+
+    // Ставит курсор персонажа на всё окно (кроме поля, у поля свой курсор: см. BoardPanel.updateCursor).
+    private void updateCursor() {
+        int kind = controller.isComputerTurn() ? CursorSet.BUSY : CursorSet.NORMAL;
+        setCursor(cursors.get(controller.getCursorPlayer(), kind));
+        boardPanel.updateCursor();
     }
 
     // Ход компьютера (вызывается таймером).

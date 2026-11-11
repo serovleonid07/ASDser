@@ -66,6 +66,25 @@ public class GameController {
         return !isGameOver() && !isHuman[getActivePlayer()];
     }
 
+    // Играет ли за этого игрока (PLAYER_FOX или PLAYER_GEESE) человек?
+    public boolean isHuman(int player) {
+        return isHuman[player];
+    }
+
+    // Чей курсор показывать. Если человек один, то курсор его персонажа.
+    // Если играют двое, то курсор того, чей сейчас ход.
+    public int getCursorPlayer() {
+        boolean geeseHuman = isHuman[GameRules.PLAYER_GEESE];
+        boolean foxHuman = isHuman[GameRules.PLAYER_FOX];
+        if (geeseHuman && !foxHuman) {
+            return GameRules.PLAYER_GEESE;
+        }
+        if (foxHuman && !geeseHuman) {
+            return GameRules.PLAYER_FOX;
+        }
+        return getActivePlayer();
+    }
+
     // Нужно ли сейчас выбрать стартовую клетку лисы?
     public boolean needFoxPlacement() {
         return !state.isFoxPlaced();

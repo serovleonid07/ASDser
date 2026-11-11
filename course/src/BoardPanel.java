@@ -32,6 +32,9 @@ public class BoardPanel extends JPanel {
     private final MoveList targets = new MoveList();  // ходы выбранной фишки (для подсветки)
     private final PieceImages images = new PieceImages();  // картинки лисы и гуся
     private final BackgroundImage background = new BackgroundImage();  // фон: луг, забор, деревья
+    private final CursorSet cursors;   // курсоры лисы и гуся
+    private int hoverRow = -1;         // клетка под мышью (-1 = мышь вне поля)
+    private int hoverCol = -1;
 
     // Цвета (светлая тема).
     private static final Color COLOR_BACKGROUND = new Color(0xF4EFE6);
@@ -48,8 +51,14 @@ public class BoardPanel extends JPanel {
     private static final Color COLOR_CURSOR = new Color(0x1E5FD0);
     private static final Color COLOR_LAST_MOVE = new Color(242, 194, 0, 100);  // подсветка последнего хода
 
+    // Короткий вариант конструктора (для проверок): курсоры создаются внутри.
     public BoardPanel(GameController controller, Runnable onChange) {
+        this(controller, new CursorSet(), onChange);
+    }
+
+    public BoardPanel(GameController controller, CursorSet cursors, Runnable onChange) {
         this.controller = controller;
+        this.cursors = cursors;
         this.onChange = onChange;
         setBackground(COLOR_BACKGROUND);
         setPreferredSize(new Dimension(560, 560));
@@ -104,7 +113,69 @@ public class BoardPanel extends JPanel {
                 cursorCol = Math.max(0, Math.min(GameRules.BOARD_SIZE - 1, col));
                 activateCell(row, col);
             }
+
+            @Override
+            public void mouseExited(MouseEvent e) {
+                hoverRow = -1;
+                hoverCol = -1;
+                updateCursor();
+            }
         });
+        // Следим за положением мыши, чтобы менять курсор над фишками и клетками хода.
+        addMouseMotionListener(new MouseAdapter() {
+            @Override
+            public void mouseMoved(MouseEvent e) {
+                if (e.getX() < offsetX() || e.getY() < offsetY()) {
+                    hoverRow = -1;
+                    hoverCol = -1;
+                } else {
+                    hoverCol = (e.getX() - offsetX()) / cellSize();
+                    hoverRow = (e.getY() - offsetY()) / cellSize();
+                }
+                updateCursor();
+            }
+        });
+    }
+
+    // ---------- Курсор мыши ----------
+
+    // Выбирает курсор для текущей ситуации и ставит его на панель.
+    // Если думает компьютер, то курсор «занят». Если мышь над тем, на что можно нажать, то «рука».
+    // Иначе обычный указатель. Персонаж (лиса или гусь) зависит от того, за кого играет человек.
+    // Вызывается при движении мыши и после каждого изменения игры.
+    public void updateCursor() {
+        int player = controller.getCursorPlayer();
+        int kind = CursorSet.NORMAL;
+        if (controller.isComputerTurn()) {
+            kind = CursorSet.BUSY;
+        } else if (isActionable(hoverRow, hoverCol)) {
+            kind = CursorSet.LINK;
+        }
+        setCursor(cursors.get(player, kind));
+    }
+
+    // Можно ли сейчас нажать на клетку (row, col): это своя фишка, клетка для хода или место для лисы.
+    private boolean isActionable(int row, int col) {
+        if (!controller.isHumanTurn()) {
+            return false;
+        }
+        Board board = controller.getState().getBoard();
+        if (!board.isInside(row, col)) {
+            return false;
+        }
+        if (controller.needFoxPlacement()) {
+            return board.get(row, col) == GameRules.EMPTY;
+        }
+        // Клетка, в которую выбранная фишка может пойти.
+        for (int i = 0; i < targets.size(); i++) {
+            if (targets.get(i).toRow == row && targets.get(i).toCol == col) {
+                return true;
+            }
+        }
+        // Своя фишка.
+        boolean foxTurn = controller.getActivePlayer() == GameRules.PLAYER_FOX;
+        int piece = board.get(row, col);
+        return foxTurn ? piece == GameRules.FOX : piece == GameRules.GOOSE;
     }
 
     // ---------- Клавиатура ----------
@@ -118,6 +189,7 @@ public class BoardPanel extends JPanel {
         bindKey(KeyEvent.VK_ESCAPE, () -> {
             clearSelection();
             repaint();
+            updateCursor();
         });
     }
 
@@ -152,8 +224,14 @@ public class BoardPanel extends JPanel {
 
     // ---------- Действие над клеткой (общее для мыши и клавиатуры) ----------
 
-    // Что делает игрок, когда «нажал» на клетку (row, col).
+    // Что делает игрок, когда «нажал» на клетку (row, col). После действия обновляем курсор.
     private void activateCell(int row, int col) {
+        doActivateCell(row, col);
+        updateCursor();
+    }
+
+    // Само действие над клеткой (выбор фишки, ход или постановка лисы).
+    private void doActivateCell(int row, int col) {
         if (!controller.isHumanTurn()) {
             return;
         }

@@ -2,6 +2,7 @@ import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.InputStream;
 import javax.imageio.ImageIO;
 
@@ -15,23 +16,35 @@ public class PieceImages {
     private BufferedImage gooseScaled = null;   // гусь уже нужного размера (кэш)
     private int scaledSize = -1;                // для какого размера сделан кэш
 
-    // Загружает картинку из папки images. Сначала ищет в classpath (рядом с классами),
-    // потом в папке src/images (если запускаем из папки проекта).
-    static BufferedImage load(String name) {
+    // Открывает файл из папки images для чтения. Сначала ищет в classpath (рядом с классами),
+    // потом в папке src/images (если запускаем из папки проекта). Если файла нет, возвращает null.
+    static InputStream openStream(String name) {
         try {
             InputStream stream = PieceImages.class.getResourceAsStream("/images/" + name);
             if (stream != null) {
-                return ImageIO.read(stream);
+                return stream;
             }
             String[] folders = {"src/images/", "course/src/images/"};
             for (String folder : folders) {
                 File file = new File(folder + name);
                 if (file.exists()) {
-                    return ImageIO.read(file);
+                    return new FileInputStream(file);
                 }
             }
         } catch (Exception e) {
-            // Не смогли прочитать файл: вернём null, будут кружки.
+            // Не смогли открыть файл: вернём null.
+        }
+        return null;
+    }
+
+    // Загружает картинку из папки images. Если не получилось, возвращает null (тогда рисуем запасной вариант).
+    static BufferedImage load(String name) {
+        try (InputStream stream = openStream(name)) {
+            if (stream != null) {
+                return ImageIO.read(stream);
+            }
+        } catch (Exception e) {
+            // Не смогли прочитать файл: вернём null.
         }
         return null;
     }
