@@ -1,0 +1,353 @@
+import java.awt.BasicStroke;
+import java.awt.Color;
+import java.awt.Dimension;
+import java.awt.Font;
+import java.awt.FontMetrics;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
+import java.awt.event.ActionEvent;
+import java.awt.event.KeyEvent;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+import javax.swing.AbstractAction;
+import javax.swing.JComponent;
+import javax.swing.JPanel;
+import javax.swing.KeyStroke;
+
+// Панель, которая рисует игровое поле и принимает мышь и клавиатуру.
+// Мышь: щелчок по своей фишке выбирает её, щелчок по зелёной точке делает ход.
+// Клавиатура: стрелки двигают курсор, Enter или пробел = щелчок, Esc снимает выбор.
+public class BoardPanel extends JPanel {
+    private final GameController controller;  // логика игры
+    private final Runnable onChange;          // что вызвать после действия человека (обновить статус, запустить компьютер)
+
+    private int selectedRow = -1;   // выбранная фишка (-1 = ничего не выбрано)
+    private int selectedCol = -1;
+    private int cursorRow = 3;      // клетка, на которой стоит клавиатурный курсор
+    private int cursorCol = 3;
+    private final MoveList targets = new MoveList();  // ходы выбранной фишки (для подсветки)
+
+    // Цвета (светлая тема).
+    private static final Color COLOR_BACKGROUND = new Color(0xF4EFE6);
+    private static final Color COLOR_LINE = new Color(0x8A7F70);
+    private static final Color COLOR_GOOSE = new Color(0xFFFFFF);
+    private static final Color COLOR_GOOSE_BORDER = new Color(0x4A4A4A);
+    private static final Color COLOR_FOX = new Color(0xE0701B);
+    private static final Color COLOR_FOX_BORDER = new Color(0x8A3F05);
+    private static final Color COLOR_SELECTED = new Color(0xF2C200);
+    private static final Color COLOR_TARGET = new Color(0x2E9E4F);
+    private static final Color COLOR_CAPTURE = new Color(0xC62828);
+    private static final Color COLOR_CURSOR = new Color(0x1E5FD0);
+    private static final Color COLOR_LAST_MOVE = new Color(242, 194, 0, 100);  // подсветка последнего хода
+
+    public BoardPanel(GameController controller, Runnable onChange) {
+        this.controller = controller;
+        this.onChange = onChange;
+        setBackground(COLOR_BACKGROUND);
+        setPreferredSize(new Dimension(560, 560));
+        setFocusable(true);
+        setupMouse();
+        setupKeys();
+    }
+
+    // ---------- Геометрия ----------
+
+    // Размер одной клетки в пикселях (поле вписывается в панель с небольшим отступом).
+    // Отступ по краям панели, в нём рисуются подписи a-g и 1-7.
+    private static final int MARGIN = 28;
+
+    private int cellSize() {
+        int side = Math.min(getWidth(), getHeight()) - 2 * MARGIN;
+        return Math.max(20, side / GameRules.BOARD_SIZE);
+    }
+
+    // Левый отступ, чтобы поле стояло по центру.
+    private int offsetX() {
+        return (getWidth() - cellSize() * GameRules.BOARD_SIZE) / 2;
+    }
+
+    // Верхний отступ.
+    private int offsetY() {
+        return (getHeight() - cellSize() * GameRules.BOARD_SIZE) / 2;
+    }
+
+    // Координата x центра клетки в столбце col.
+    private int centerX(int col) {
+        return offsetX() + col * cellSize() + cellSize() / 2;
+    }
+
+    // Координата y центра клетки в строке row.
+    private int centerY(int row) {
+        return offsetY() + row * cellSize() + cellSize() / 2;
+    }
+
+    // ---------- Мышь ----------
+    private void setupMouse() {
+        addMouseListener(new MouseAdapter() {
+            @Override
+            public void mousePressed(MouseEvent e) {
+                requestFocusInWindow();
+                int col = (e.getX() - offsetX()) / cellSize();
+                int row = (e.getY() - offsetY()) / cellSize();
+                if (e.getX() < offsetX() || e.getY() < offsetY()) {
+                    return;  // щелчок вне поля
+                }
+                cursorRow = Math.max(0, Math.min(GameRules.BOARD_SIZE - 1, row));
+                cursorCol = Math.max(0, Math.min(GameRules.BOARD_SIZE - 1, col));
+                activateCell(row, col);
+            }
+        });
+    }
+
+    // ---------- Клавиатура ----------
+    private void setupKeys() {
+        bindKey(KeyEvent.VK_UP, () -> moveCursor(-1, 0));
+        bindKey(KeyEvent.VK_DOWN, () -> moveCursor(1, 0));
+        bindKey(KeyEvent.VK_LEFT, () -> moveCursor(0, -1));
+        bindKey(KeyEvent.VK_RIGHT, () -> moveCursor(0, 1));
+        bindKey(KeyEvent.VK_ENTER, () -> activateCell(cursorRow, cursorCol));
+        bindKey(KeyEvent.VK_SPACE, () -> activateCell(cursorRow, cursorCol));
+        bindKey(KeyEvent.VK_ESCAPE, () -> {
+            clearSelection();
+            repaint();
+        });
+    }
+
+    // Привязывает клавишу к действию.
+    private void bindKey(int keyCode, Runnable action) {
+        String name = "key" + keyCode;
+        getInputMap(JComponent.WHEN_FOCUSED).put(KeyStroke.getKeyStroke(keyCode, 0), name);
+        getActionMap().put(name, new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                action.run();
+            }
+        });
+    }
+
+    // Двигает курсор на клетку в направлении (dRow, dCol), перешагивая вырезанные углы.
+    private void moveCursor(int dRow, int dCol) {
+        Board board = controller.getState().getBoard();
+        int row = cursorRow + dRow;
+        int col = cursorCol + dCol;
+        while (row >= 0 && row < GameRules.BOARD_SIZE && col >= 0 && col < GameRules.BOARD_SIZE) {
+            if (board.isInside(row, col)) {
+                cursorRow = row;
+                cursorCol = col;
+                break;
+            }
+            row += dRow;
+            col += dCol;
+        }
+        repaint();
+    }
+
+    // ---------- Действие над клеткой (общее для мыши и клавиатуры) ----------
+
+    // Что делает игрок, когда «нажал» на клетку (row, col).
+    private void activateCell(int row, int col) {
+        if (!controller.isHumanTurn()) {
+            return;
+        }
+        Board board = controller.getState().getBoard();
+        if (!board.isInside(row, col)) {
+            return;
+        }
+
+        // Этап расстановки: игрок-лиса выбирает стартовую клетку.
+        if (controller.needFoxPlacement()) {
+            if (controller.tryPlaceFox(row, col)) {
+                clearSelection();
+                repaint();
+                onChange.run();
+            }
+            return;
+        }
+
+        // Если уже выбрана фишка и нажали на клетку-цель, пробуем сделать ход.
+        if (selectedRow >= 0 && controller.tryMove(selectedRow, selectedCol, row, col)) {
+            clearSelection();
+            repaint();
+            onChange.run();
+            return;
+        }
+
+        // Иначе пробуем выбрать свою фишку в этой клетке.
+        int piece = board.get(row, col);
+        boolean foxTurn = controller.getActivePlayer() == GameRules.PLAYER_FOX;
+        boolean ownPiece = foxTurn ? piece == GameRules.FOX : piece == GameRules.GOOSE;
+        if (ownPiece) {
+            selectedRow = row;
+            selectedCol = col;
+            controller.getMovesFrom(row, col, targets);
+        } else {
+            clearSelection();
+        }
+        repaint();
+    }
+
+    // Снимает выбор фишки.
+    public void clearSelection() {
+        selectedRow = -1;
+        selectedCol = -1;
+        targets.clear();
+    }
+
+    // ---------- Рисование ----------
+    @Override
+    protected void paintComponent(Graphics g0) {
+        super.paintComponent(g0);
+        Graphics2D g = (Graphics2D) g0;
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+
+        Board board = controller.getState().getBoard();
+        int cell = cellSize();
+
+        drawLastMove(g, cell);
+        drawGridLines(g, board);
+        drawPoints(g, board, cell);
+        drawTargets(g, cell);
+        drawSelection(g, cell);
+        drawPieces(g, board, cell);
+        drawCursor(g, cell);
+        drawLabels(g, cell);
+    }
+
+    // Подсвечивает клетки последнего хода.
+    private void drawLastMove(Graphics2D g, int cell) {
+        Move last = controller.getLastMove();
+        if (last == null) {
+            return;
+        }
+        g.setColor(COLOR_LAST_MOVE);
+        int r = cell / 2;
+        g.fillOval(centerX(last.fromCol) - r, centerY(last.fromRow) - r, 2 * r, 2 * r);
+        g.fillOval(centerX(last.toCol) - r, centerY(last.toRow) - r, 2 * r, 2 * r);
+    }
+
+    // Рисует линии поля: горизонтали, вертикали и диагонали между соседними клетками.
+    private void drawGridLines(Graphics2D g, Board board) {
+        g.setColor(COLOR_LINE);
+        g.setStroke(new BasicStroke(2f));
+        for (int row = 0; row < GameRules.BOARD_SIZE; row++) {
+            for (int col = 0; col < GameRules.BOARD_SIZE; col++) {
+                if (!board.isInside(row, col)) {
+                    continue;
+                }
+                // Четыре направления вперёд (вправо, вниз, вниз-вправо, вниз-влево), чтобы не рисовать линию дважды.
+                int[] dRow = {0, 1, 1, 1};
+                int[] dCol = {1, 0, 1, -1};
+                for (int d = 0; d < 4; d++) {
+                    int nextRow = row + dRow[d];
+                    int nextCol = col + dCol[d];
+                    if (board.isInside(nextRow, nextCol)) {
+                        g.drawLine(centerX(col), centerY(row), centerX(nextCol), centerY(nextRow));
+                    }
+                }
+            }
+        }
+    }
+
+    // Рисует маленькие точки-узлы в пустых клетках.
+    private void drawPoints(Graphics2D g, Board board, int cell) {
+        g.setColor(COLOR_LINE);
+        int r = Math.max(3, cell / 14);
+        for (int row = 0; row < GameRules.BOARD_SIZE; row++) {
+            for (int col = 0; col < GameRules.BOARD_SIZE; col++) {
+                if (board.isInside(row, col)) {
+                    g.fillOval(centerX(col) - r, centerY(row) - r, 2 * r, 2 * r);
+                }
+            }
+        }
+    }
+
+    // Рисует возможные ходы выбранной фишки: зелёная точка (шаг) или красное кольцо (прыжок).
+    private void drawTargets(Graphics2D g, int cell) {
+        for (int i = 0; i < targets.size(); i++) {
+            Move move = targets.get(i);
+            int cx = centerX(move.toCol);
+            int cy = centerY(move.toRow);
+            int r = cell / 4;
+            if (move.isCapture()) {
+                g.setColor(COLOR_CAPTURE);
+                g.setStroke(new BasicStroke(3f));
+                g.drawOval(cx - r, cy - r, 2 * r, 2 * r);
+                g.fillOval(cx - r / 3, cy - r / 3, 2 * r / 3, 2 * r / 3);
+            } else {
+                g.setColor(COLOR_TARGET);
+                g.fillOval(cx - r / 2, cy - r / 2, r, r);
+            }
+        }
+    }
+
+    // Обводит выбранную фишку жёлтым кольцом.
+    private void drawSelection(Graphics2D g, int cell) {
+        if (selectedRow < 0) {
+            return;
+        }
+        int r = cell * 2 / 5 + 4;
+        g.setColor(COLOR_SELECTED);
+        g.setStroke(new BasicStroke(4f));
+        g.drawOval(centerX(selectedCol) - r, centerY(selectedRow) - r, 2 * r, 2 * r);
+    }
+
+    // Рисует гусей и лису.
+    private void drawPieces(Graphics2D g, Board board, int cell) {
+        int r = cell * 2 / 5 - 2;
+        for (int row = 0; row < GameRules.BOARD_SIZE; row++) {
+            for (int col = 0; col < GameRules.BOARD_SIZE; col++) {
+                if (!board.isInside(row, col)) {
+                    continue;
+                }
+                int piece = board.get(row, col);
+                int cx = centerX(col);
+                int cy = centerY(row);
+                if (piece == GameRules.GOOSE) {
+                    g.setColor(COLOR_GOOSE);
+                    g.fillOval(cx - r, cy - r, 2 * r, 2 * r);
+                    g.setColor(COLOR_GOOSE_BORDER);
+                    g.setStroke(new BasicStroke(2f));
+                    g.drawOval(cx - r, cy - r, 2 * r, 2 * r);
+                } else if (piece == GameRules.FOX) {
+                    g.setColor(COLOR_FOX);
+                    g.fillOval(cx - r, cy - r, 2 * r, 2 * r);
+                    g.setColor(COLOR_FOX_BORDER);
+                    g.setStroke(new BasicStroke(3f));
+                    g.drawOval(cx - r, cy - r, 2 * r, 2 * r);
+                    // Буква «Л» (лиса) в центре фишки.
+                    g.setColor(Color.WHITE);
+                    g.setFont(new Font(Font.SANS_SERIF, Font.BOLD, Math.max(12, r)));
+                    FontMetrics fm = g.getFontMetrics();
+                    String text = "Л";
+                    g.drawString(text, cx - fm.stringWidth(text) / 2, cy + (fm.getAscent() - fm.getDescent()) / 2);
+                }
+            }
+        }
+    }
+
+    // Рисует синий квадрат клавиатурного курсора (только когда сейчас ход человека).
+    private void drawCursor(Graphics2D g, int cell) {
+        if (!controller.isHumanTurn() || !isFocusOwner()) {
+            return;
+        }
+        int half = cell / 2 - 2;
+        g.setColor(COLOR_CURSOR);
+        g.setStroke(new BasicStroke(3f));
+        g.drawRoundRect(centerX(cursorCol) - half, centerY(cursorRow) - half, 2 * half, 2 * half, 10, 10);
+    }
+
+    // Подписи клеток по краям: буквы a-g снизу и числа 1-7 слева (как в записи ходов).
+    private void drawLabels(Graphics2D g, int cell) {
+        g.setColor(COLOR_LINE);
+        g.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, Math.max(10, cell / 6)));
+        FontMetrics fm = g.getFontMetrics();
+        for (int i = 0; i < GameRules.BOARD_SIZE; i++) {
+            String letter = String.valueOf((char) ('a' + i));
+            g.drawString(letter, centerX(i) - fm.stringWidth(letter) / 2, offsetY() + cell * GameRules.BOARD_SIZE + fm.getAscent());
+            String number = String.valueOf(GameRules.BOARD_SIZE - i);
+            g.drawString(number, offsetX() - fm.stringWidth(number) - 4, centerY(i) + fm.getAscent() / 2);
+        }
+    }
+}

@@ -8,6 +8,7 @@
       <module fileurl="file://$PROJECT_DIR$/4lab/4lab.iml" filepath="$PROJECT_DIR$/4lab/4lab.iml" />
       <module fileurl="file://$PROJECT_DIR$/5lab/5lab.iml" filepath="$PROJECT_DIR$/5lab/5lab.iml" />
       <module fileurl="file://$PROJECT_DIR$/6lab/6lab.iml" filepath="$PROJECT_DIR$/6lab/6lab.iml" />
+      <module fileurl="file://$PROJECT_DIR$/course/course.iml" filepath="$PROJECT_DIR$/course/course.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/ASDser.iml" filepath="$PROJECT_DIR$/.idea/ASDser.iml" />
     </modules>
   </component>
