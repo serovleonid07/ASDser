@@ -10,6 +10,9 @@ import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.awt.Rectangle;
+import java.awt.geom.Area;
+import java.awt.image.BufferedImage;
 import javax.swing.AbstractAction;
 import javax.swing.JComponent;
 import javax.swing.JPanel;
@@ -27,9 +30,13 @@ public class BoardPanel extends JPanel {
     private int cursorRow = 3;      // клетка, на которой стоит клавиатурный курсор
     private int cursorCol = 3;
     private final MoveList targets = new MoveList();  // ходы выбранной фишки (для подсветки)
+    private final PieceImages images = new PieceImages();  // картинки лисы и гуся
+    private final BackgroundImage background = new BackgroundImage();  // фон: луг, забор, деревья
 
     // Цвета (светлая тема).
     private static final Color COLOR_BACKGROUND = new Color(0xF4EFE6);
+    private static final Color COLOR_PLATE = new Color(251, 246, 234, 95);  // полупрозрачная подложка под полем
+    private static final Color COLOR_LABEL_BACK = new Color(251, 246, 234, 215);  // подложка под подписями
     private static final Color COLOR_LINE = new Color(0x8A7F70);
     private static final Color COLOR_GOOSE = new Color(0xFFFFFF);
     private static final Color COLOR_GOOSE_BORDER = new Color(0x4A4A4A);
@@ -205,14 +212,42 @@ public class BoardPanel extends JPanel {
         Board board = controller.getState().getBoard();
         int cell = cellSize();
 
+        drawBackground(g);
+        drawPlate(g, board, cell);
         drawLastMove(g, cell);
         drawGridLines(g, board);
         drawPoints(g, board, cell);
         drawTargets(g, cell);
-        drawSelection(g, cell);
         drawPieces(g, board, cell);
+        drawSelection(g, cell);   // кольцо выбора рисуем поверх фишки
         drawCursor(g, cell);
         drawLabels(g, cell);
+    }
+
+    // Рисует фоновую картинку на всю панель (по центру, с обрезкой лишнего по краям).
+    private void drawBackground(Graphics2D g) {
+        BufferedImage image = background.get(Math.max(getWidth(), getHeight()));
+        if (image != null) {
+            g.drawImage(image, (getWidth() - image.getWidth()) / 2, (getHeight() - image.getHeight()) / 2, null);
+        }
+    }
+
+    // Рисует светлую полупрозрачную подложку под клетками поля, чтобы линии были хорошо видны на фоне.
+    private void drawPlate(Graphics2D g, Board board, int cell) {
+        if (!background.isLoaded()) {
+            return;  // без фона подложка не нужна
+        }
+        // Собираем все клетки в одну фигуру и заливаем один раз: так нет швов и двойной прозрачности.
+        Area plate = new Area();
+        for (int row = 0; row < GameRules.BOARD_SIZE; row++) {
+            for (int col = 0; col < GameRules.BOARD_SIZE; col++) {
+                if (board.isInside(row, col)) {
+                    plate.add(new Area(new Rectangle(centerX(col) - cell / 2, centerY(row) - cell / 2, cell, cell)));
+                }
+            }
+        }
+        g.setColor(COLOR_PLATE);
+        g.fill(plate);
     }
 
     // Подсвечивает клетки последнего хода.
@@ -287,7 +322,7 @@ public class BoardPanel extends JPanel {
         if (selectedRow < 0) {
             return;
         }
-        int r = cell * 2 / 5 + 4;
+        int r = cell * 9 / 20 + 2;
         g.setColor(COLOR_SELECTED);
         g.setStroke(new BasicStroke(4f));
         g.drawOval(centerX(selectedCol) - r, centerY(selectedRow) - r, 2 * r, 2 * r);
@@ -304,6 +339,19 @@ public class BoardPanel extends JPanel {
                 int piece = board.get(row, col);
                 int cx = centerX(col);
                 int cy = centerY(row);
+
+                // Если есть картинки фишек, рисуем их вместо кружков.
+                if (piece == GameRules.GOOSE || piece == GameRules.FOX) {
+                    int iconSize = cell * 86 / 100;
+                    BufferedImage icon = piece == GameRules.FOX
+                            ? images.getFox(iconSize) : images.getGoose(iconSize);
+                    if (icon != null) {
+                        g.drawImage(icon, cx - iconSize / 2, cy - iconSize / 2, null);
+                        continue;
+                    }
+                }
+
+                // Запасной вариант без картинок: обычные кружки.
                 if (piece == GameRules.GOOSE) {
                     g.setColor(COLOR_GOOSE);
                     g.fillOval(cx - r, cy - r, 2 * r, 2 * r);
@@ -340,14 +388,24 @@ public class BoardPanel extends JPanel {
 
     // Подписи клеток по краям: буквы a-g снизу и числа 1-7 слева (как в записи ходов).
     private void drawLabels(Graphics2D g, int cell) {
-        g.setColor(COLOR_LINE);
-        g.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, Math.max(10, cell / 6)));
+        g.setFont(new Font(Font.SANS_SERIF, Font.BOLD, Math.max(10, cell / 6)));
         FontMetrics fm = g.getFontMetrics();
         for (int i = 0; i < GameRules.BOARD_SIZE; i++) {
             String letter = String.valueOf((char) ('a' + i));
-            g.drawString(letter, centerX(i) - fm.stringWidth(letter) / 2, offsetY() + cell * GameRules.BOARD_SIZE + fm.getAscent());
+            drawLabel(g, fm, letter, centerX(i) - fm.stringWidth(letter) / 2,
+                    offsetY() + cell * GameRules.BOARD_SIZE + fm.getAscent());
             String number = String.valueOf(GameRules.BOARD_SIZE - i);
-            g.drawString(number, offsetX() - fm.stringWidth(number) - 4, centerY(i) + fm.getAscent() / 2);
+            drawLabel(g, fm, number, offsetX() - fm.stringWidth(number) - 6,
+                    centerY(i) + fm.getAscent() / 2);
         }
+    }
+
+    // Рисует одну подпись на светлой плашке, чтобы её было видно на любом фоне.
+    private void drawLabel(Graphics2D g, FontMetrics fm, String text, int x, int y) {
+        int width = fm.stringWidth(text);
+        g.setColor(COLOR_LABEL_BACK);
+        g.fillRoundRect(x - 5, y - fm.getAscent() - 1, width + 10, fm.getHeight() + 2, 10, 10);
+        g.setColor(new Color(0x5B5246));
+        g.drawString(text, x, y);
     }
 }
