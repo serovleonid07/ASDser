@@ -32,6 +32,7 @@ public class GameWindow extends JFrame {
     private final JLabel statusLabel = new JLabel();
     private final Timer computerTimer;          // таймер: даёт окну перерисоваться перед ходом компьютера
     private int depth = DEPTH_MEDIUM;           // выбранный уровень сложности
+    private boolean statsRecorded = false;      // записали ли уже итог партии в статистику
     private boolean resultShown = false;        // показали ли уже сообщение об окончании партии
 
     // Окно состоит из двух «карточек»: стартовое меню и сама игра. Показывается одна из них.
@@ -101,8 +102,10 @@ public class GameWindow extends JFrame {
         game.add(menuItem("Новая игра: я за лису", KeyStroke.getKeyStroke(KeyEvent.VK_F3, 0), () -> startNewGame(false, true)));
         game.add(menuItem("Новая игра: два игрока", KeyStroke.getKeyStroke(KeyEvent.VK_F4, 0), () -> startNewGame(true, true)));
         game.addSeparator();
+        game.add(menuItem("Подсказка", KeyStroke.getKeyStroke(KeyEvent.VK_H, 0), boardPanel::showHint));
         game.add(menuItem("Отменить ход", KeyStroke.getKeyStroke(KeyEvent.VK_Z, ctrl), this::undo));
         game.addSeparator();
+        game.add(menuItem("Статистика", null, () -> StatsDialog.show(this)));
         game.add(menuItem("В главное меню", KeyStroke.getKeyStroke(KeyEvent.VK_M, ctrl), this::showMenu));
         game.add(menuItem("Выход", null, () -> System.exit(0)));
         bar.add(game);
@@ -115,6 +118,20 @@ public class GameWindow extends JFrame {
             level.add(levelItems[i]);
         }
         bar.add(level);
+
+        JMenu theme = new JMenu("Тема");
+        ButtonGroup themeGroup = new ButtonGroup();
+        for (int i = 0; i < Settings.THEME_NAMES.length; i++) {
+            final int index = i;
+            JRadioButtonMenuItem item = new JRadioButtonMenuItem(Settings.THEME_NAMES[i], i == Settings.getTheme());
+            item.addActionListener(e -> {
+                Settings.setTheme(index);
+                repaint();
+            });
+            themeGroup.add(item);
+            theme.add(item);
+        }
+        bar.add(theme);
 
         JMenu help = new JMenu("Справка");
         help.add(menuItem("Правила игры", KeyStroke.getKeyStroke(KeyEvent.VK_F1, 0), this::showRules));
@@ -153,8 +170,10 @@ public class GameWindow extends JFrame {
         lastFoxHuman = foxHuman;
         showGame();
         controller.newGame(geeseHuman, foxHuman, depth);
+        boardPanel.stopAnimation();
         boardPanel.clearSelection();
         resultShown = false;
+        statsRecorded = false;
         boardPanel.repaint();
         afterChange();
     }
@@ -194,6 +213,7 @@ public class GameWindow extends JFrame {
     private void undo() {
         if (controller.canUndo() && !computerTimer.isRunning()) {
             controller.undo();
+            boardPanel.stopAnimation();
             boardPanel.clearSelection();
             resultShown = false;
             boardPanel.repaint();
@@ -209,15 +229,53 @@ public class GameWindow extends JFrame {
             computerTimer.restart();
         } else if (controller.isGameOver() && !resultShown) {
             resultShown = true;
-            String[] options = {"Играть снова", "В главное меню"};
-            int choice = JOptionPane.showOptionDialog(this, resultText(), "Игра окончена",
-                    JOptionPane.DEFAULT_OPTION, JOptionPane.INFORMATION_MESSAGE, null, options, options[0]);
-            if (choice == 0) {
-                startNewGame(lastGeeseHuman, lastFoxHuman);
-            } else if (choice == 1) {
-                showMenu();
+            recordStats();
+            // Окно с итогом показываем чуть позже, чтобы успела закончиться анимация последнего хода.
+            Timer later = new Timer(500, e -> showResultDialog());
+            later.setRepeats(false);
+            later.start();
+        }
+    }
+
+    // Окно «Игра окончена» с выбором: сыграть снова или в главное меню.
+    private void showResultDialog() {
+        if (!controller.isGameOver()) {
+            return;   // за это время успели начать новую игру или отменить ход
+        }
+        String[] options = {"Играть снова", "В главное меню"};
+        int choice = JOptionPane.showOptionDialog(this, resultText(), "Игра окончена",
+                JOptionPane.DEFAULT_OPTION, JOptionPane.INFORMATION_MESSAGE, null, options, options[0]);
+        if (choice == 0) {
+            startNewGame(lastGeeseHuman, lastFoxHuman);
+        } else if (choice == 1) {
+            showMenu();
+        }
+    }
+
+    // Записывает итог партии в статистику. Считаем только партии «человек против компьютера».
+    // Сложность берём ту, что выбрана сейчас.
+    private void recordStats() {
+        if (statsRecorded || lastGeeseHuman == lastFoxHuman) {
+            return;
+        }
+        statsRecorded = true;
+        int result = controller.getResult();
+        int humanWinResult = lastGeeseHuman ? GameRules.RESULT_GEESE_WIN : GameRules.RESULT_FOX_WINS;
+        int kind;
+        if (result == humanWinResult) {
+            kind = Settings.WIN;
+        } else if (result == GameRules.RESULT_DRAW) {
+            kind = Settings.DRAW;
+        } else {
+            kind = Settings.LOSS;
+        }
+        int level = 1;
+        for (int i = 0; i < DEPTHS.length; i++) {
+            if (DEPTHS[i] == depth) {
+                level = i;
             }
         }
+        Settings.addResult(level, kind);
     }
 
     // Ставит курсор персонажа на всё окно (кроме поля, у поля свой курсор: см. BoardPanel.updateCursor).
@@ -229,7 +287,11 @@ public class GameWindow extends JFrame {
 
     // Ход компьютера (вызывается таймером).
     private void computerStep() {
+        int movesBefore = controller.getMoveCount();
         controller.doComputerStep();
+        if (controller.getMoveCount() > movesBefore) {
+            boardPanel.animateLastMove();      // плавно двигаем фишку компьютера
+        }
         boardPanel.repaint();
         afterChange();
     }
@@ -283,6 +345,7 @@ public class GameWindow extends JFrame {
                 + "Клавиатура:\n"
                 + "  стрелки — двигать синий курсор по полю\n"
                 + "  Enter или пробел — выбрать фишку / сделать ход\n"
+                + "  H — подсказка (компьютер советует ход)\n"
                 + "  Esc — снять выбор\n"
                 + "  Ctrl+Z — отменить ход\n"
                 + "  F2 / F3 / F4 — новая игра (за гусей / за лису / два игрока)\n"

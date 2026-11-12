@@ -160,6 +160,28 @@ public class GameController {
         }
     }
 
+    // ---------- Подсказка ----------
+
+    // Глубина поиска для подсказки: небольшая, чтобы подсказка появлялась сразу.
+    private static final int HINT_DEPTH = 4;
+
+    // Возвращает лучший ход для игрока, чей сейчас ход (или null, если подсказывать нечего).
+    // Для постановки лисы лучше использовать getFoxStartHint.
+    public Move getHintMove() {
+        if (isGameOver() || !state.isFoxPlaced()) {
+            return null;
+        }
+        return ai.chooseMove(state, HINT_DEPTH);
+    }
+
+    // Возвращает лучшую стартовую клетку лисы {строка, столбец}.
+    public int[] getFoxStartHint() {
+        if (isGameOver() || state.isFoxPlaced()) {
+            return null;
+        }
+        return ai.chooseFoxStart(state, 3);
+    }
+
     // ---------- Отмена хода ----------
 
     // Можно ли отменить ход? Против компьютера отменяются сразу два хода (свой и компьютера).

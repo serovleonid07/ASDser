@@ -17,6 +17,8 @@ import javax.swing.AbstractAction;
 import javax.swing.JComponent;
 import javax.swing.JPanel;
 import javax.swing.KeyStroke;
+import javax.swing.Timer;
+import java.awt.AlphaComposite;
 
 // Панель, которая рисует игровое поле и принимает мышь и клавиатуру.
 // Мышь: щелчок по своей фишке выбирает её, щелчок по зелёной точке делает ход.
@@ -36,6 +38,17 @@ public class BoardPanel extends JPanel {
     private int hoverRow = -1;         // клетка под мышью (-1 = мышь вне поля)
     private int hoverCol = -1;
 
+    // Подсказка: ход, который советует компьютер (или стартовая клетка лисы).
+    private Move hintMove = null;
+    private int hintCellRow = -1;      // клетка для постановки лисы (-1 = нет такой подсказки)
+    private int hintCellCol = -1;
+
+    // Анимация последнего хода: фишка плавно переезжает из клетки в клетку.
+    private static final int ANIM_MS = 240;       // сколько длится анимация
+    private Move animMove = null;                 // какой ход сейчас анимируется (null = нет анимации)
+    private long animStart = 0;                   // время начала анимации (в наносекундах)
+    private final Timer animTimer = new Timer(15, e -> animationTick());
+
     // Цвета (светлая тема).
     private static final Color COLOR_BACKGROUND = new Color(0xF4EFE6);
     private static final Color COLOR_PLATE = new Color(251, 246, 234, 95);  // полупрозрачная подложка под полем
@@ -49,6 +62,7 @@ public class BoardPanel extends JPanel {
     private static final Color COLOR_TARGET = new Color(0x2E9E4F);
     private static final Color COLOR_CAPTURE = new Color(0xC62828);
     private static final Color COLOR_CURSOR = new Color(0x1E5FD0);
+    private static final Color COLOR_HINT = new Color(0x00A3A3);
     private static final Color COLOR_LAST_MOVE = new Color(242, 194, 0, 100);  // подсветка последнего хода
 
     // Короткий вариант конструктора (для проверок): курсоры создаются внутри.
@@ -186,6 +200,7 @@ public class BoardPanel extends JPanel {
         bindKey(KeyEvent.VK_RIGHT, () -> moveCursor(0, 1));
         bindKey(KeyEvent.VK_ENTER, () -> activateCell(cursorRow, cursorCol));
         bindKey(KeyEvent.VK_SPACE, () -> activateCell(cursorRow, cursorCol));
+        bindKey(KeyEvent.VK_H, this::showHint);
         bindKey(KeyEvent.VK_ESCAPE, () -> {
             clearSelection();
             repaint();
@@ -253,6 +268,7 @@ public class BoardPanel extends JPanel {
         // Если уже выбрана фишка и нажали на клетку-цель, пробуем сделать ход.
         if (selectedRow >= 0 && controller.tryMove(selectedRow, selectedCol, row, col)) {
             clearSelection();
+            startAnimation(controller.getLastMove());
             repaint();
             onChange.run();
             return;
@@ -277,6 +293,96 @@ public class BoardPanel extends JPanel {
         selectedRow = -1;
         selectedCol = -1;
         targets.clear();
+        hintMove = null;       // подсказка тоже пропадает
+        hintCellRow = -1;
+        hintCellCol = -1;
+    }
+
+    // ---------- Подсказка ----------
+
+    // Показывает подсказку: считает лучший ход (или клетку для лисы) и рисует его на поле.
+    public void showHint() {
+        if (!controller.isHumanTurn()) {
+            return;
+        }
+        clearSelection();
+        if (controller.needFoxPlacement()) {
+            int[] cell = controller.getFoxStartHint();
+            if (cell != null) {
+                hintCellRow = cell[0];
+                hintCellCol = cell[1];
+            }
+        } else {
+            hintMove = controller.getHintMove();
+        }
+        repaint();
+    }
+
+    // Рисует подсказку: кольцо на фишке и стрелка к клетке, куда стоит пойти.
+    private void drawHint(Graphics2D g, int cell) {
+        g.setColor(COLOR_HINT);
+        g.setStroke(new BasicStroke(5f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+        int r = cell * 9 / 20;
+        if (hintCellRow >= 0) {                    // подсказка для постановки лисы
+            g.drawOval(centerX(hintCellCol) - r, centerY(hintCellRow) - r, 2 * r, 2 * r);
+            return;
+        }
+        if (hintMove == null) {
+            return;
+        }
+        int x1 = centerX(hintMove.fromCol);
+        int y1 = centerY(hintMove.fromRow);
+        int x2 = centerX(hintMove.toCol);
+        int y2 = centerY(hintMove.toRow);
+        g.drawOval(x1 - r, y1 - r, 2 * r, 2 * r);          // кольцо вокруг фишки, которой ходить
+        g.drawOval(x2 - r / 2, y2 - r / 2, r, r);           // маленькое кольцо там, куда идти
+        // Стрелка между кольцами.
+        double angle = Math.atan2(y2 - y1, x2 - x1);
+        int sx = (int) (x1 + Math.cos(angle) * r);
+        int sy = (int) (y1 + Math.sin(angle) * r);
+        int ex = (int) (x2 - Math.cos(angle) * r / 2);
+        int ey = (int) (y2 - Math.sin(angle) * r / 2);
+        g.drawLine(sx, sy, ex, ey);
+        int head = cell / 5;
+        g.drawLine(ex, ey, (int) (ex - head * Math.cos(angle - 0.45)), (int) (ey - head * Math.sin(angle - 0.45)));
+        g.drawLine(ex, ey, (int) (ex - head * Math.cos(angle + 0.45)), (int) (ey - head * Math.sin(angle + 0.45)));
+    }
+
+    // ---------- Анимация хода ----------
+
+    // Запускает анимацию хода: фишка плавно едет из старой клетки в новую.
+    public void startAnimation(Move move) {
+        if (move == null) {
+            return;
+        }
+        animMove = move;
+        animStart = System.nanoTime();
+        animTimer.start();
+    }
+
+    // Запускает анимацию последнего хода (его сделал компьютер).
+    public void animateLastMove() {
+        startAnimation(controller.getLastMove());
+    }
+
+    // Останавливает анимацию (при новой игре или отмене хода).
+    public void stopAnimation() {
+        animMove = null;
+        animTimer.stop();
+    }
+
+    // Сколько анимации уже прошло: число от 0 до 1 (1 = анимация закончилась).
+    private double animProgress() {
+        double t = (System.nanoTime() - animStart) / 1_000_000.0 / ANIM_MS;
+        return Math.max(0, Math.min(1, t));
+    }
+
+    // Вызывается таймером: перерисовываем, а когда время вышло, выключаем анимацию.
+    private void animationTick() {
+        if (animMove == null || animProgress() >= 1) {
+            stopAnimation();
+        }
+        repaint();
     }
 
     // ---------- Рисование ----------
@@ -298,6 +404,7 @@ public class BoardPanel extends JPanel {
         drawTargets(g, cell);
         drawPieces(g, board, cell);
         drawSelection(g, cell);   // кольцо выбора рисуем поверх фишки
+        drawHint(g, cell);
         drawCursor(g, cell);
         drawLabels(g, cell);
     }
@@ -406,50 +513,71 @@ public class BoardPanel extends JPanel {
         g.drawOval(centerX(selectedCol) - r, centerY(selectedRow) - r, 2 * r, 2 * r);
     }
 
-    // Рисует гусей и лису.
+    // Рисует гусей и лису. Если идёт анимация, едущая фишка рисуется отдельно, между клетками.
     private void drawPieces(Graphics2D g, Board board, int cell) {
-        int r = cell * 2 / 5 - 2;
         for (int row = 0; row < GameRules.BOARD_SIZE; row++) {
             for (int col = 0; col < GameRules.BOARD_SIZE; col++) {
                 if (!board.isInside(row, col)) {
                     continue;
                 }
-                int piece = board.get(row, col);
-                int cx = centerX(col);
-                int cy = centerY(row);
-
-                // Если есть картинки фишек, рисуем их вместо кружков.
-                if (piece == GameRules.GOOSE || piece == GameRules.FOX) {
-                    int iconSize = cell * 86 / 100;
-                    BufferedImage icon = piece == GameRules.FOX
-                            ? images.getFox(iconSize) : images.getGoose(iconSize);
-                    if (icon != null) {
-                        g.drawImage(icon, cx - iconSize / 2, cy - iconSize / 2, null);
-                        continue;
-                    }
+                // Клетку, куда сейчас едет фишка, пока не рисуем: фишка нарисуется на пути.
+                if (animMove != null && row == animMove.toRow && col == animMove.toCol) {
+                    continue;
                 }
-
-                // Запасной вариант без картинок: обычные кружки.
-                if (piece == GameRules.GOOSE) {
-                    g.setColor(COLOR_GOOSE);
-                    g.fillOval(cx - r, cy - r, 2 * r, 2 * r);
-                    g.setColor(COLOR_GOOSE_BORDER);
-                    g.setStroke(new BasicStroke(2f));
-                    g.drawOval(cx - r, cy - r, 2 * r, 2 * r);
-                } else if (piece == GameRules.FOX) {
-                    g.setColor(COLOR_FOX);
-                    g.fillOval(cx - r, cy - r, 2 * r, 2 * r);
-                    g.setColor(COLOR_FOX_BORDER);
-                    g.setStroke(new BasicStroke(3f));
-                    g.drawOval(cx - r, cy - r, 2 * r, 2 * r);
-                    // Буква «Л» (лиса) в центре фишки.
-                    g.setColor(Color.WHITE);
-                    g.setFont(new Font(Font.SANS_SERIF, Font.BOLD, Math.max(12, r)));
-                    FontMetrics fm = g.getFontMetrics();
-                    String text = "Л";
-                    g.drawString(text, cx - fm.stringWidth(text) / 2, cy + (fm.getAscent() - fm.getDescent()) / 2);
-                }
+                drawPiece(g, board.get(row, col), centerX(col), centerY(row), cell);
             }
+        }
+        if (animMove == null) {
+            return;
+        }
+        double t = animProgress();
+        double eased = t * t * (3 - 2 * t);    // плавный старт и плавная остановка
+        // Съеденный гусь медленно тает на своём месте.
+        if (animMove.isCapture()) {
+            java.awt.Composite old = g.getComposite();
+            g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, (float) (1 - eased)));
+            drawPiece(g, GameRules.GOOSE, centerX(animMove.capturedCol), centerY(animMove.capturedRow), cell);
+            g.setComposite(old);
+        }
+        // Едущая фишка: между старой и новой клеткой.
+        double x = centerX(animMove.fromCol) + (centerX(animMove.toCol) - centerX(animMove.fromCol)) * eased;
+        double y = centerY(animMove.fromRow) + (centerY(animMove.toRow) - centerY(animMove.fromRow)) * eased;
+        drawPiece(g, board.get(animMove.toRow, animMove.toCol), (int) x, (int) y, cell);
+    }
+
+    // Рисует одну фишку (piece: GOOSE, FOX или пусто) с центром в (cx, cy).
+    private void drawPiece(Graphics2D g, int piece, int cx, int cy, int cell) {
+        if (piece != GameRules.GOOSE && piece != GameRules.FOX) {
+            return;
+        }
+        // Если есть картинки фишек, рисуем их.
+        int iconSize = cell * 86 / 100;
+        BufferedImage icon = piece == GameRules.FOX ? images.getFox(iconSize) : images.getGoose(iconSize);
+        if (icon != null) {
+            g.drawImage(icon, cx - iconSize / 2, cy - iconSize / 2, null);
+            return;
+        }
+
+        // Запасной вариант без картинок: обычные кружки.
+        int r = cell * 2 / 5 - 2;
+        if (piece == GameRules.GOOSE) {
+            g.setColor(COLOR_GOOSE);
+            g.fillOval(cx - r, cy - r, 2 * r, 2 * r);
+            g.setColor(COLOR_GOOSE_BORDER);
+            g.setStroke(new BasicStroke(2f));
+            g.drawOval(cx - r, cy - r, 2 * r, 2 * r);
+        } else {
+            g.setColor(COLOR_FOX);
+            g.fillOval(cx - r, cy - r, 2 * r, 2 * r);
+            g.setColor(COLOR_FOX_BORDER);
+            g.setStroke(new BasicStroke(3f));
+            g.drawOval(cx - r, cy - r, 2 * r, 2 * r);
+            // Буква «Л» (лиса) в центре фишки.
+            g.setColor(Color.WHITE);
+            g.setFont(new Font(Font.SANS_SERIF, Font.BOLD, Math.max(12, r)));
+            FontMetrics fm = g.getFontMetrics();
+            String text = "Л";
+            g.drawString(text, cx - fm.stringWidth(text) / 2, cy + (fm.getAscent() - fm.getDescent()) / 2);
         }
     }
 

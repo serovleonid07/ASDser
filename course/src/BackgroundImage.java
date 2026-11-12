@@ -3,20 +3,40 @@ import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 
 // Фоновая картинка (луг, забор, деревья). Квадратная, растягивается на всё окно.
+// Есть три темы: день, вечер, зима (у каждой свой файл). Выбранная тема хранится в Settings.
 // Если файла нет, метод get возвращает null, и поле рисуется на обычном однотонном фоне.
 public class BackgroundImage {
-    private final BufferedImage original = PieceImages.load("background.png");  // исходная картинка
-    private BufferedImage scaled = null;   // картинка нужного размера (кэш)
-    private int scaledSize = -1;           // для какого размера сделан кэш
+    private static final String[] FILES = {"background.png", "background_evening.png", "background_winter.png"};
+
+    private BufferedImage original = null;   // исходная картинка выбранной темы
+    private int loadedTheme = -1;            // для какой темы она загружена
+    private BufferedImage scaled = null;     // картинка нужного размера (кэш)
+    private int scaledSize = -1;             // для какого размера сделан кэш
+
+    // Следит, чтобы загруженная картинка соответствовала выбранной теме.
+    private void checkTheme() {
+        int theme = Settings.getTheme();
+        if (theme != loadedTheme) {
+            loadedTheme = theme;
+            original = PieceImages.load(FILES[theme]);
+            if (original == null) {
+                original = PieceImages.load(FILES[0]);   // нет файла темы: берём дневной
+            }
+            scaled = null;
+            scaledSize = -1;
+        }
+    }
 
     // Есть ли картинка (удалось ли её загрузить).
     public boolean isLoaded() {
+        checkTheme();
         return original != null;
     }
 
     // Возвращает фон размером size x size пикселей (или null, если картинки нет).
     // size берём как большую сторону окна, чтобы фон закрыл его целиком.
     public BufferedImage get(int size) {
+        checkTheme();
         if (original == null || size <= 0) {
             return null;
         }

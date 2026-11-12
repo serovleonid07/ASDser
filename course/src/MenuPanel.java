@@ -167,7 +167,7 @@ public class MenuPanel extends JPanel {
 
         BufferedImage picture = PieceImages.load("menu_picture.png");
         if (picture != null) {
-            JLabel pictureLabel = new JLabel(new ImageIcon(MenuStyle.scaleToWidth(picture, 400)));
+            JLabel pictureLabel = new JLabel(new ImageIcon(MenuStyle.scaleToWidth(picture, 340)));
             pictureLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
             page.add(pictureLabel);
         }
@@ -177,12 +177,37 @@ public class MenuPanel extends JPanel {
         MenuStyle.Button human = bigButton("Играть против человека", () -> listener.onStart(true, true, DEPTHS[depthIndex]));
         MenuStyle.Button rules = bigButton("Правила игры", () -> showPage(PAGE_RULES));
         MenuStyle.Button exit = bigButton("Выход", listener::onExit);
-        MenuStyle.Button[] buttons = {mainFirstButton, human, rules, exit};
+        // Ряд из двух кнопок: статистика и смена темы (день, вечер, зима).
+        MenuStyle.Button stats = new MenuStyle.Button("Статистика");
+        MenuStyle.Button theme = new MenuStyle.Button("Тема: " + Settings.THEME_NAMES[Settings.getTheme()]);
+        stats.addActionListener(e -> StatsDialog.show(this));
+        theme.addActionListener(e -> {
+            Settings.setTheme((Settings.getTheme() + 1) % Settings.THEME_NAMES.length);
+            theme.setText("Тема: " + Settings.THEME_NAMES[Settings.getTheme()]);
+            repaint();   // перерисовываем меню с новым фоном
+        });
+        JPanel smallRow = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 0));
+        smallRow.setOpaque(false);
+        for (MenuStyle.Button b : new MenuStyle.Button[]{stats, theme}) {
+            b.setPreferredSize(new Dimension(185, 50));
+            smallRow.add(b);
+        }
+        smallRow.setAlignmentX(Component.CENTER_ALIGNMENT);
+        smallRow.setMaximumSize(new Dimension(380, 50));
+
+        MenuStyle.Button[] buttons = {mainFirstButton, human, rules};
         for (MenuStyle.Button b : buttons) {
             page.add(b);
             page.add(Box.createVerticalStrut(10));
             installKeys(b);
         }
+        page.add(smallRow);
+        page.add(Box.createVerticalStrut(10));
+        installKeys(stats);
+        installKeys(theme);
+        page.add(exit);
+        page.add(Box.createVerticalStrut(10));
+        installKeys(exit);
 
         JLabel tip = new JLabel("Стрелки и Enter — управление с клавиатуры");
         tip.setFont(MenuStyle.font(Font.ITALIC, 12));
