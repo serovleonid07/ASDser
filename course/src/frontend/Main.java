@@ -1,7 +1,10 @@
+package frontend;
+
+import backend.*;
 import javax.swing.SwingUtilities;
 
 // Точка входа: запускает окно игры.
-// Запуск: java -cp out Main
+// Запуск: java -cp out frontend.Main
 public class Main {
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {

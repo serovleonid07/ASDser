@@ -8,7 +8,7 @@ if exist dist rmdir /s /q dist
 if exist exe rmdir /s /q exe
 mkdir dist
 copy /Y FoxAndGeese.jar dist\ >nul
-jpackage --type app-image --name FoxAndGeese --input dist --main-jar FoxAndGeese.jar --main-class Main --icon icon.ico --dest exe --app-version 1.0 || (echo jpackage error. & pause & exit /b 1)
+jpackage --type app-image --name FoxAndGeese --input dist --main-jar FoxAndGeese.jar --main-class frontend.Main --icon icon.ico --dest exe --app-version 1.0 || (echo jpackage error. & pause & exit /b 1)
 rmdir /s /q dist
 echo.
 echo Done. The game is in the folder exe\FoxAndGeese. Run FoxAndGeese.exe or make a desktop shortcut to it.

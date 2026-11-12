@@ -1,3 +1,6 @@
+package frontend;
+
+import backend.*;
 import java.awt.BorderLayout;
 import java.awt.CardLayout;
 import java.awt.Color;
@@ -31,7 +34,8 @@ import javax.swing.border.EmptyBorder;
 // Стартовое меню игры. Три страницы:
 //   main     - главная: против компьютера, против человека, правила, выход;
 //   computer - настройки игры против компьютера: за кого играем и какая сложность;
-//   rules    - подробные правила.
+//   rules    - подробные правила;
+//   stats    - статистика (две вкладки).
 // Управление: мышь, а также стрелки (переход между кнопками), Enter (нажать), Esc (назад).
 public class MenuPanel extends JPanel {
     // Что меню сообщает окну игры.
@@ -46,6 +50,7 @@ public class MenuPanel extends JPanel {
     private static final String PAGE_MAIN = "main";
     private static final String PAGE_COMPUTER = "computer";
     private static final String PAGE_RULES = "rules";
+    private static final String PAGE_STATS = "stats";
 
     private static final int[] DEPTHS = {3, 5, 7};   // глубина поиска для лёгкой, средней, сложной
     private static final String[] DEPTH_NAMES = {"Лёгкая", "Средняя", "Сложная"};
@@ -64,6 +69,7 @@ public class MenuPanel extends JPanel {
     private final CardLayout cards = new CardLayout();
     private final JPanel pages = new JPanel(cards);   // страницы меню лежат друг на друге
     private String currentPage = PAGE_MAIN;
+    private final StatsPanel statsPanel = new StatsPanel(() -> showPage(PAGE_MAIN));   // страница статистики
 
     // Настройки игры против компьютера.
     private boolean playAsGeese = true;
@@ -103,6 +109,7 @@ public class MenuPanel extends JPanel {
         pages.add(createMainPage(), PAGE_MAIN);
         pages.add(createComputerPage(), PAGE_COMPUTER);
         pages.add(createRulesPage(), PAGE_RULES);
+        pages.add(statsPanel, PAGE_STATS);
         card.add(pages, BorderLayout.CENTER);
         add(card);
 
@@ -145,6 +152,8 @@ public class MenuPanel extends JPanel {
                 computerStartButton.requestFocusInWindow();
             } else if (PAGE_RULES.equals(name) && rulesBackButton != null) {
                 rulesBackButton.requestFocusInWindow();
+            } else if (PAGE_STATS.equals(name)) {
+                statsPanel.refresh();
             }
         });
     }
@@ -167,7 +176,7 @@ public class MenuPanel extends JPanel {
 
         BufferedImage picture = PieceImages.load("menu_picture.png");
         if (picture != null) {
-            JLabel pictureLabel = new JLabel(new ImageIcon(MenuStyle.scaleToWidth(picture, 340)));
+            JLabel pictureLabel = new JLabel(new ImageIcon(MenuStyle.scaleToWidth(picture, 300)));
             pictureLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
             page.add(pictureLabel);
         }
@@ -177,37 +186,21 @@ public class MenuPanel extends JPanel {
         MenuStyle.Button human = bigButton("Играть против человека", () -> listener.onStart(true, true, DEPTHS[depthIndex]));
         MenuStyle.Button rules = bigButton("Правила игры", () -> showPage(PAGE_RULES));
         MenuStyle.Button exit = bigButton("Выход", listener::onExit);
-        // Ряд из двух кнопок: статистика и смена темы (день, вечер, зима).
-        MenuStyle.Button stats = new MenuStyle.Button("Статистика");
-        MenuStyle.Button theme = new MenuStyle.Button("Тема: " + Settings.THEME_NAMES[Settings.getTheme()]);
-        stats.addActionListener(e -> StatsDialog.show(this));
+        // Статистика и смена темы (день, вечер, зима): кнопки такой же ширины, как остальные.
+        MenuStyle.Button stats = bigButton("Статистика", () -> showPage(PAGE_STATS));
+        MenuStyle.Button theme = bigButton("Тема: " + Settings.THEME_NAMES[Settings.getTheme()], null);
         theme.addActionListener(e -> {
             Settings.setTheme((Settings.getTheme() + 1) % Settings.THEME_NAMES.length);
             theme.setText("Тема: " + Settings.THEME_NAMES[Settings.getTheme()]);
             repaint();   // перерисовываем меню с новым фоном
         });
-        JPanel smallRow = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 0));
-        smallRow.setOpaque(false);
-        for (MenuStyle.Button b : new MenuStyle.Button[]{stats, theme}) {
-            b.setPreferredSize(new Dimension(185, 50));
-            smallRow.add(b);
-        }
-        smallRow.setAlignmentX(Component.CENTER_ALIGNMENT);
-        smallRow.setMaximumSize(new Dimension(380, 50));
 
-        MenuStyle.Button[] buttons = {mainFirstButton, human, rules};
+        MenuStyle.Button[] buttons = {mainFirstButton, human, stats, theme, rules, exit};
         for (MenuStyle.Button b : buttons) {
             page.add(b);
-            page.add(Box.createVerticalStrut(10));
+            page.add(Box.createVerticalStrut(8));
             installKeys(b);
         }
-        page.add(smallRow);
-        page.add(Box.createVerticalStrut(10));
-        installKeys(stats);
-        installKeys(theme);
-        page.add(exit);
-        page.add(Box.createVerticalStrut(10));
-        installKeys(exit);
 
         JLabel tip = new JLabel("Стрелки и Enter — управление с клавиатуры");
         tip.setFont(MenuStyle.font(Font.ITALIC, 12));

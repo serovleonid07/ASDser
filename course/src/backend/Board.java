@@ -1,3 +1,5 @@
+package backend;
+
 // Игровое поле: двумерный массив 7x7 в форме креста.
 // В каждой клетке лежит число: OUTSIDE, EMPTY, FOX или GOOSE (см. GameRules).
 public class Board {

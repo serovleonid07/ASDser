@@ -1,3 +1,6 @@
+package frontend;
+
+import backend.*;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
@@ -17,14 +20,14 @@ public class PieceImages {
     private int scaledSize = -1;                // для какого размера сделан кэш
 
     // Открывает файл из папки images для чтения. Сначала ищет в classpath (рядом с классами),
-    // потом в папке src/images (если запускаем из папки проекта). Если файла нет, возвращает null.
+    // потом в папке src/frontend/images (если запускаем из папки проекта). Если файла нет, возвращает null.
     static InputStream openStream(String name) {
         try {
             InputStream stream = PieceImages.class.getResourceAsStream("/images/" + name);
             if (stream != null) {
                 return stream;
             }
-            String[] folders = {"src/images/", "course/src/images/"};
+            String[] folders = {"src/frontend/images/", "course/src/frontend/images/"};
             for (String folder : folders) {
                 File file = new File(folder + name);
                 if (file.exists()) {

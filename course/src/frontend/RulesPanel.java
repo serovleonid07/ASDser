@@ -1,3 +1,6 @@
+package frontend;
+
+import backend.*;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;

@@ -1,5 +1,7 @@
+package backend;
+
 // Проверка без графики: компьютер играет сам с собой, затем сравниваем скорость поиска.
-// Запуск: java -cp out ConsoleDemo
+// Запуск: java -cp out backend.ConsoleDemo
 public class ConsoleDemo {
     // Рисует поле текстом: F — лиса, G — гуси, . — пусто, пробел — вне поля.
     static void printBoard(GameState state) {

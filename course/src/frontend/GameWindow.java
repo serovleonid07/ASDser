@@ -1,9 +1,13 @@
+package frontend;
+
+import backend.*;
 import java.awt.BorderLayout;
 import java.awt.CardLayout;
 import java.awt.Cursor;
 import java.awt.Font;
 import java.awt.image.BufferedImage;
 import javax.swing.JPanel;
+import javax.swing.JComponent;
 import javax.swing.ButtonGroup;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
@@ -39,6 +43,7 @@ public class GameWindow extends JFrame {
     private final CardLayout rootCards = new CardLayout();
     private final JPanel root = new JPanel(rootCards);
     private final MenuPanel menuPanel;
+    private StatsPanel statsPanel;              // страница статистики внутри игры
     private final JMenuBar menuBar;             // меню окна (показываем только во время игры)
     private final JRadioButtonMenuItem[] levelItems = new JRadioButtonMenuItem[3];
     private boolean lastGeeseHuman = true;      // с какими настройками началась последняя партия
@@ -77,6 +82,7 @@ public class GameWindow extends JFrame {
 
         root.add(menuPanel, "menu");
         root.add(gamePanel, "game");
+        root.add(createStatsScreen(), "stats");
         setContentPane(root);
 
         computerTimer = new Timer(300, e -> computerStep());
@@ -105,7 +111,7 @@ public class GameWindow extends JFrame {
         game.add(menuItem("Подсказка", KeyStroke.getKeyStroke(KeyEvent.VK_H, 0), boardPanel::showHint));
         game.add(menuItem("Отменить ход", KeyStroke.getKeyStroke(KeyEvent.VK_Z, ctrl), this::undo));
         game.addSeparator();
-        game.add(menuItem("Статистика", null, () -> StatsDialog.show(this)));
+        game.add(menuItem("Статистика", null, this::showStats));
         game.add(menuItem("В главное меню", KeyStroke.getKeyStroke(KeyEvent.VK_M, ctrl), this::showMenu));
         game.add(menuItem("Выход", null, () -> System.exit(0)));
         bar.add(game);
@@ -209,6 +215,65 @@ public class GameWindow extends JFrame {
         boardPanel.requestFocusInWindow();
     }
 
+    // Страница статистики поверх игры: фон, карточка и сама статистика. Партия при этом остаётся как была.
+    private JComponent createStatsScreen() {
+        statsPanel = new StatsPanel(this::closeStats);
+        JPanel screen = new JPanel(new java.awt.GridBagLayout()) {
+            private final BackgroundImage background = new BackgroundImage();
+
+            @Override
+            protected void paintComponent(java.awt.Graphics g) {
+                super.paintComponent(g);
+                BufferedImage image = background.get(Math.max(getWidth(), getHeight()));
+                if (image != null) {
+                    g.drawImage(image, (getWidth() - image.getWidth()) / 2, (getHeight() - image.getHeight()) / 2, null);
+                }
+            }
+        };
+        JPanel card = new JPanel(new BorderLayout()) {
+            @Override
+            protected void paintComponent(java.awt.Graphics g0) {
+                java.awt.Graphics2D g = (java.awt.Graphics2D) g0.create();
+                g.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+                g.setColor(MenuStyle.CARD);
+                g.fillRoundRect(0, 0, getWidth(), getHeight(), 30, 30);
+                g.setColor(new java.awt.Color(0xB9AE9C));
+                g.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 30, 30);
+                g.dispose();
+            }
+        };
+        card.setOpaque(false);
+        card.setBorder(new EmptyBorder(14, 18, 14, 18));
+        card.setPreferredSize(new java.awt.Dimension(580, 560));
+        card.add(statsPanel, BorderLayout.CENTER);
+        screen.add(card);
+        // Esc тоже закрывает статистику.
+        screen.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), "closeStats");
+        screen.getActionMap().put("closeStats", new javax.swing.AbstractAction() {
+            @Override
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                closeStats();
+            }
+        });
+        return screen;
+    }
+
+    // Показывает статистику. Компьютер на это время не ходит.
+    private void showStats() {
+        computerTimer.stop();
+        rootCards.show(root, "stats");
+        statsPanel.refresh();
+    }
+
+    // Возвращает из статистики в игру.
+    private void closeStats() {
+        rootCards.show(root, "game");
+        boardPanel.requestFocusInWindow();
+        if (controller.isComputerTurn()) {
+            computerTimer.restart();   // вернулись: компьютер продолжает свой ход
+        }
+    }
+
     // Отменяет ход.
     private void undo() {
         if (controller.canUndo() && !computerTimer.isRunning()) {
@@ -252,14 +317,24 @@ public class GameWindow extends JFrame {
         }
     }
 
-    // Записывает итог партии в статистику. Считаем только партии «человек против компьютера».
+    // Записывает итог партии в статистику (отдельно: человек против компьютера и два человека).
     // Сложность берём ту, что выбрана сейчас.
     private void recordStats() {
-        if (statsRecorded || lastGeeseHuman == lastFoxHuman) {
+        if (statsRecorded) {
             return;
         }
         statsRecorded = true;
         int result = controller.getResult();
+        if (lastGeeseHuman && lastFoxHuman) {         // два человека
+            if (result == GameRules.RESULT_GEESE_WIN) {
+                Settings.addHumanResult(Settings.HH_GEESE);
+            } else if (result == GameRules.RESULT_FOX_WINS) {
+                Settings.addHumanResult(Settings.HH_FOX);
+            } else {
+                Settings.addHumanResult(Settings.HH_DRAW);
+            }
+            return;
+        }
         int humanWinResult = lastGeeseHuman ? GameRules.RESULT_GEESE_WIN : GameRules.RESULT_FOX_WINS;
         int kind;
         if (result == humanWinResult) {
