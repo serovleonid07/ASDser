@@ -61,7 +61,7 @@ public class BoardPanel extends JPanel {
         this.cursors = cursors;
         this.onChange = onChange;
         setBackground(COLOR_BACKGROUND);
-        setPreferredSize(new Dimension(560, 560));
+        setPreferredSize(new Dimension(640, 640));
         setFocusable(true);
         setupMouse();
         setupKeys();

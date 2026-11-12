@@ -1,5 +1,9 @@
 import java.awt.BorderLayout;
+import java.awt.CardLayout;
+import java.awt.Cursor;
 import java.awt.Font;
+import java.awt.image.BufferedImage;
+import javax.swing.JPanel;
 import javax.swing.ButtonGroup;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
@@ -20,6 +24,8 @@ public class GameWindow extends JFrame {
     private static final int DEPTH_MEDIUM = 5;
     private static final int DEPTH_HARD = 7;
 
+    private static final int[] DEPTHS = {DEPTH_EASY, DEPTH_MEDIUM, DEPTH_HARD};
+
     private final GameController controller = new GameController();
     private final CursorSet cursors = new CursorSet();   // курсоры лисы и гуся
     private final BoardPanel boardPanel;
@@ -28,25 +34,58 @@ public class GameWindow extends JFrame {
     private int depth = DEPTH_MEDIUM;           // выбранный уровень сложности
     private boolean resultShown = false;        // показали ли уже сообщение об окончании партии
 
+    // Окно состоит из двух «карточек»: стартовое меню и сама игра. Показывается одна из них.
+    private final CardLayout rootCards = new CardLayout();
+    private final JPanel root = new JPanel(rootCards);
+    private final MenuPanel menuPanel;
+    private final JMenuBar menuBar;             // меню окна (показываем только во время игры)
+    private final JRadioButtonMenuItem[] levelItems = new JRadioButtonMenuItem[3];
+    private boolean lastGeeseHuman = true;      // с какими настройками началась последняя партия
+    private boolean lastFoxHuman = false;
+
     public GameWindow() {
         super("Лиса и гуси");
         setDefaultCloseOperation(EXIT_ON_CLOSE);
 
-        boardPanel = new BoardPanel(controller, cursors, this::afterChange);
-        add(boardPanel, BorderLayout.CENTER);
+        // Значок окна (в заголовке и на панели задач).
+        BufferedImage icon = PieceImages.load("fox.png");
+        if (icon != null) {
+            setIconImage(icon);
+        }
 
-        statusLabel.setFont(statusLabel.getFont().deriveFont(Font.PLAIN, 15f));
+        // Карточка «игра»: поле и строка состояния.
+        boardPanel = new BoardPanel(controller, cursors, this::afterChange);
+        JPanel gamePanel = new JPanel(new BorderLayout());
+        gamePanel.add(boardPanel, BorderLayout.CENTER);
+        statusLabel.setFont(statusLabel.getFont().deriveFont(Font.PLAIN, 14f));
         statusLabel.setBorder(new EmptyBorder(8, 12, 8, 12));
-        add(statusLabel, BorderLayout.SOUTH);
+        gamePanel.add(statusLabel, BorderLayout.SOUTH);
+
+        // Карточка «меню».
+        menuPanel = new MenuPanel(new MenuPanel.Listener() {
+            @Override
+            public void onStart(boolean geeseHuman, boolean foxHuman, int chosenDepth) {
+                startFromMenu(geeseHuman, foxHuman, chosenDepth);
+            }
+
+            @Override
+            public void onExit() {
+                System.exit(0);
+            }
+        });
+
+        root.add(menuPanel, "menu");
+        root.add(gamePanel, "game");
+        setContentPane(root);
 
         computerTimer = new Timer(300, e -> computerStep());
         computerTimer.setRepeats(false);
 
-        setJMenuBar(createMenu());
+        menuBar = createMenu();
         pack();
         setLocationRelativeTo(null);
 
-        startNewGame(true, false);
+        showMenu();   // при запуске показываем стартовое меню
     }
 
     // ---------- Меню ----------
@@ -61,14 +100,17 @@ public class GameWindow extends JFrame {
         game.addSeparator();
         game.add(menuItem("Отменить ход", KeyStroke.getKeyStroke(KeyEvent.VK_Z, ctrl), this::undo));
         game.addSeparator();
+        game.add(menuItem("В главное меню", KeyStroke.getKeyStroke(KeyEvent.VK_M, ctrl), this::showMenu));
         game.add(menuItem("Выход", null, () -> System.exit(0)));
         bar.add(game);
 
         JMenu level = new JMenu("Сложность");
         ButtonGroup group = new ButtonGroup();
-        level.add(levelItem("Лёгкая", DEPTH_EASY, group));
-        level.add(levelItem("Средняя", DEPTH_MEDIUM, group));
-        level.add(levelItem("Сложная", DEPTH_HARD, group));
+        String[] names = {"Лёгкая", "Средняя", "Сложная"};
+        for (int i = 0; i < 3; i++) {
+            levelItems[i] = levelItem(names[i], DEPTHS[i], group);
+            level.add(levelItems[i]);
+        }
         bar.add(level);
 
         JMenu help = new JMenu("Справка");
@@ -104,11 +146,45 @@ public class GameWindow extends JFrame {
     // Начинает новую партию.
     private void startNewGame(boolean geeseHuman, boolean foxHuman) {
         computerTimer.stop();
+        lastGeeseHuman = geeseHuman;
+        lastFoxHuman = foxHuman;
+        showGame();
         controller.newGame(geeseHuman, foxHuman, depth);
         boardPanel.clearSelection();
         resultShown = false;
         boardPanel.repaint();
         afterChange();
+    }
+
+    // Начало партии из стартового меню: запоминаем выбранную сложность и стартуем.
+    private void startFromMenu(boolean geeseHuman, boolean foxHuman, int chosenDepth) {
+        depth = chosenDepth;
+        controller.setDepth(chosenDepth);
+        for (int i = 0; i < 3; i++) {
+            levelItems[i].setSelected(DEPTHS[i] == chosenDepth);   // галочка в меню «Сложность»
+        }
+        startNewGame(geeseHuman, foxHuman);
+    }
+
+    // Показывает стартовое меню. Партия, которая шла, просто остаётся позади.
+    private void showMenu() {
+        computerTimer.stop();
+        setJMenuBar(null);
+        setCursor(Cursor.getDefaultCursor());
+        rootCards.show(root, "menu");
+        menuPanel.reset();
+        getRootPane().revalidate();
+        repaint();
+    }
+
+    // Показывает игру (поле и меню окна).
+    private void showGame() {
+        if (getJMenuBar() == null) {
+            setJMenuBar(menuBar);
+        }
+        rootCards.show(root, "game");
+        getRootPane().revalidate();
+        boardPanel.requestFocusInWindow();
     }
 
     // Отменяет ход.
@@ -130,7 +206,14 @@ public class GameWindow extends JFrame {
             computerTimer.restart();
         } else if (controller.isGameOver() && !resultShown) {
             resultShown = true;
-            JOptionPane.showMessageDialog(this, resultText(), "Игра окончена", JOptionPane.INFORMATION_MESSAGE);
+            String[] options = {"Играть снова", "В главное меню"};
+            int choice = JOptionPane.showOptionDialog(this, resultText(), "Игра окончена",
+                    JOptionPane.DEFAULT_OPTION, JOptionPane.INFORMATION_MESSAGE, null, options, options[0]);
+            if (choice == 0) {
+                startNewGame(lastGeeseHuman, lastFoxHuman);
+            } else if (choice == 1) {
+                showMenu();
+            }
         }
     }
 
@@ -158,17 +241,17 @@ public class GameWindow extends JFrame {
             text = resultText();
         } else if (controller.needFoxPlacement()) {
             text = controller.isHumanTurn()
-                    ? "Выберите стартовую клетку для лисы (щёлкните по свободной клетке)"
-                    : "Компьютер выбирает клетку для лисы...";
+                    ? "Поставьте лису на свободную клетку"
+                    : "Компьютер ставит лису...";
         } else {
             boolean foxTurn = state.getCurrentPlayer() == GameRules.PLAYER_FOX;
             String who = foxTurn ? "Ход лисы" : "Ход гусей";
             text = who + (controller.isHumanTurn() ? "" : " (компьютер думает...)");
         }
-        text += "   |   Гусей на поле: " + state.getGeeseCount() + " из " + GameRules.GEESE_AT_START
-                + "   |   Ходов: " + controller.getMoveCount();
+        text += "  |  Гусей: " + state.getGeeseCount() + " из " + GameRules.GEESE_AT_START
+                + "  |  Ходов: " + controller.getMoveCount();
         if (controller.getLastMove() != null) {
-            text += "   |   Последний ход: " + controller.getLastMove();
+            text += "  |  Последний: " + controller.getLastMove();
         }
         statusLabel.setText(text);
     }
@@ -185,19 +268,9 @@ public class GameWindow extends JFrame {
         return "Ничья (достигнут предел в " + GameRules.MAX_MOVES + " ходов).";
     }
 
-    // Окно с правилами игры.
+    // Окно с подробными правилами игры (тот же текст, что и в стартовом меню).
     private void showRules() {
-        String text = "Лиса и гуси\n\n"
-                + "Поле в форме креста. У гусей 17 фишек, они стоят в нижней части поля.\n"
-                + "Перед началом игрок-лиса ставит свою фишку в любую свободную клетку.\n"
-                + "Гуси ходят первыми.\n\n"
-                + "Гусь: на одну свободную клетку вверх, вниз, влево или вправо.\n"
-                + "Лиса: так же, а ещё по диагонали. Кроме того, лиса может перепрыгнуть\n"
-                + "через соседнего гуся на свободную клетку за ним и съесть его.\n\n"
-                + "Гуси выигрывают, если лиса не может сделать ход.\n"
-                + "Лиса выигрывает, если на поле осталось 6 гусей или меньше.\n"
-                + "Если за " + GameRules.MAX_MOVES + " ходов никто не победил, объявляется ничья.";
-        JOptionPane.showMessageDialog(this, text, "Правила игры", JOptionPane.INFORMATION_MESSAGE);
+        RulesPanel.showDialog(this);
     }
 
     // Окно с описанием управления.
