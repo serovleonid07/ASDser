@@ -22,7 +22,7 @@ public class CursorSet {
 
     // «Острие» курсора (точка, которая попадает по клетке) для каждого файла: {x, y}.
     // Порядок: [normal, link, busy]. Значения взяты из самих файлов курсоров.
-    private static final int[][] FOX_HOTSPOT = {{0, 0}, {4, 0}, {12, 11}};
+    private static final int[][] FOX_HOTSPOT = {{0, 0}, {8, 1}, {12, 11}};
     private static final int[][] GOOSE_HOTSPOT = {{1, 1}, {3, 2}, {3, 0}};
 
     // cursors[игрок][вид]: готовые курсоры. Может быть null, если не получилось создать.

@@ -84,6 +84,9 @@ public class GameWindow extends JFrame {
         menuBar = createMenu();
         pack();
         setLocationRelativeTo(null);
+        // Сразу открываем окно на весь экран (панель задач не закрываем).
+        setBounds(java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment().getMaximumWindowBounds());
+        setExtendedState(JFrame.MAXIMIZED_BOTH);
 
         showMenu();   // при запуске показываем стартовое меню
     }
