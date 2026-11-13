@@ -1,48 +1,50 @@
-// Поле головоломки «Фонари» (Light Up).
-// Клетка белая или чёрная. В чёрной клетке может стоять число от 0 до 4:
-// столько ламп должно быть в соседних с ней клетках (сверху, снизу, слева и справа).
-// Лампа освещает свою клетку и светит лучами вверх, вниз, влево и вправо
-// до ближайшей чёрной клетки или до края поля.
+// Поле головоломки «Нумератор» (Numbrix).
+// Поле — прямоугольная сетка. В некоторых клетках уже стоят числа.
+// Нужно заполнить пустые клетки так, чтобы числа от 1 до rows * cols
+// шли подряд: каждое следующее число стоит в соседней клетке
+// (сверху, снизу, слева или справа; по диагонали ходить нельзя).
 public class Board {
-    public static final int WHITE = -1;  // белая клетка
-    public static final int BLACK = -2;  // чёрная клетка без числа
-    // Числа 0, 1, 2, 3, 4 в массиве cells значат чёрную клетку с этим числом.
-
     // Четыре направления: вверх, вниз, влево, вправо.
     // Для направления d сдвиг по строке равен ROW_STEP[d], по столбцу COL_STEP[d].
     public static final int[] ROW_STEP = {-1, 1, 0, 0};
     public static final int[] COL_STEP = {0, 0, -1, 1};
 
-    int rows;               // сколько строк в поле
-    int cols;               // сколько столбцов в поле
-    int[][] cells;          // что лежит в клетке: WHITE, BLACK или число от 0 до 4
-    boolean[][] hasLamp;    // true, если в клетке стоит лампа
-    int[][] lightCount;     // сколько ламп освещают клетку (лампа освещает и свою клетку)
+    int rows;           // сколько строк в поле
+    int cols;           // сколько столбцов в поле
+    int[][] cells;      // число в клетке; 0 значит, что клетка пустая
+    boolean[][] fixed;  // true, если число в клетке дано в условии (его менять нельзя)
 
-    // Строит поле из текста. Каждая строка массива lines — одна строка поля:
-    // '.' — белая клетка, '#' — чёрная без числа, '0'..'4' — чёрная с этим числом.
+    // Строит поле из текста. Каждая строка массива lines — одна строка поля.
+    // Клетки в строке разделены пробелами: '.' — пустая клетка, число — готовое число.
     public Board(String[] lines) {
         rows = lines.length;
-        cols = lines[0].length();
+        String[] firstLine = lines[0].trim().split("\\s+");
+        cols = firstLine.length;
         cells = new int[rows][cols];
-        hasLamp = new boolean[rows][cols];
-        lightCount = new int[rows][cols];
+        fixed = new boolean[rows][cols];
+
+        int total = rows * cols;
+        boolean[] used = new boolean[total + 1];  // какие числа уже встретились
 
         for (int r = 0; r < rows; r++) {
-            if (lines[r].length() != cols) {
+            String[] parts = lines[r].trim().split("\\s+");
+            if (parts.length != cols) {
                 throw new IllegalArgumentException("Все строки поля должны быть одной длины");
             }
             for (int c = 0; c < cols; c++) {
-                char symbol = lines[r].charAt(c);
-                if (symbol == '.') {
-                    cells[r][c] = WHITE;
-                } else if (symbol == '#') {
-                    cells[r][c] = BLACK;
-                } else if (symbol >= '0' && symbol <= '4') {
-                    cells[r][c] = symbol - '0';  // символ '3' превращаем в число 3
-                } else {
-                    throw new IllegalArgumentException("Неизвестный символ в поле: " + symbol);
+                if (parts[c].equals(".")) {
+                    continue;  // пустая клетка, в cells уже 0
                 }
+                int number = Integer.parseInt(parts[c]);
+                if (number < 1 || number > total) {
+                    throw new IllegalArgumentException("Число вне диапазона 1.." + total + ": " + number);
+                }
+                if (used[number]) {
+                    throw new IllegalArgumentException("Число встречается дважды: " + number);
+                }
+                used[number] = true;
+                cells[r][c] = number;
+                fixed[r][c] = true;
             }
         }
     }
@@ -52,88 +54,44 @@ public class Board {
         return r >= 0 && r < rows && c >= 0 && c < cols;
     }
 
-    // Проверяет, что клетка (r, c) белая.
-    public boolean isWhite(int r, int c) {
-        return cells[r][c] == WHITE;
+    // Проверяет, что клетка (r, c) пустая.
+    public boolean isEmpty(int r, int c) {
+        return cells[r][c] == 0;
     }
 
-    // Проверяет, что в клетке (r, c) чёрная клетка с числом.
-    public boolean hasNumber(int r, int c) {
-        return cells[r][c] >= 0;
-    }
-
-    // Ставит лампу в белую клетку (r, c) и обновляет освещённость клеток.
-    public void putLamp(int r, int c) {
-        hasLamp[r][c] = true;
-        changeLight(r, c, 1);
-    }
-
-    // Убирает лампу из клетки (r, c) и обновляет освещённость клеток.
-    // Нужна для возврата назад в рекурсии.
-    public void removeLamp(int r, int c) {
-        hasLamp[r][c] = false;
-        changeLight(r, c, -1);
-    }
-
-    // Меняет освещённость всех клеток, которые видит лампа из клетки (r, c).
-    // delta = 1 — лампу поставили, delta = -1 — лампу убрали.
-    private void changeLight(int r, int c, int delta) {
-        lightCount[r][c] += delta;  // сама клетка с лампой
-
-        for (int d = 0; d < 4; d++) {
-            int nr = r + ROW_STEP[d];
-            int nc = c + COL_STEP[d];
-            // Идём по лучу, пока не вышли за поле и не упёрлись в чёрную клетку.
-            while (isInside(nr, nc) && isWhite(nr, nc)) {
-                lightCount[nr][nc] += delta;
-                nr += ROW_STEP[d];
-                nc += COL_STEP[d];
-            }
-        }
-    }
-
-    // Считает, сколько ламп стоит в четырёх соседних клетках около клетки (r, c).
-    public int lampsAround(int r, int c) {
-        int count = 0;
-        for (int d = 0; d < 4; d++) {
-            int nr = r + ROW_STEP[d];
-            int nc = c + COL_STEP[d];
-            if (isInside(nr, nc) && hasLamp[nr][nc]) {
-                count++;
-            }
-        }
-        return count;
-    }
-
-    // Делает копию текущей расстановки ламп (чтобы запомнить найденное решение).
-    public boolean[][] copyLamps() {
-        boolean[][] copy = new boolean[rows][cols];
+    // Делает копию текущего заполнения поля (чтобы запомнить найденное решение).
+    public int[][] copyCells() {
+        int[][] copy = new int[rows][cols];
         for (int r = 0; r < rows; r++) {
             for (int c = 0; c < cols; c++) {
-                copy[r][c] = hasLamp[r][c];
+                copy[r][c] = cells[r][c];
             }
         }
         return copy;
     }
 
-    // Печатает поле. lamps — расстановка ламп, которую надо показать (буква L),
-    // или null, если нужно напечатать только условие без ламп.
-    // Обозначения: '.' белая клетка, '#' чёрная без числа, цифра — чёрная с числом.
-    public void print(boolean[][] lamps) {
+    // Печатает поле. values — числа, которые надо показать (например, найденное решение),
+    // или null, если нужно показать текущее поле (условие).
+    // Пустая клетка печатается как '.'.
+    public void print(int[][] values) {
+        int[][] shown = values;
+        if (shown == null) {
+            shown = cells;
+        }
+        int width = String.valueOf(rows * cols).length();  // ширина самого большого числа
+
         for (int r = 0; r < rows; r++) {
-            String line = "  ";
+            String line = " ";
             for (int c = 0; c < cols; c++) {
-                char symbol;
-                if (lamps != null && lamps[r][c]) {
-                    symbol = 'L';
-                } else if (cells[r][c] == WHITE) {
-                    symbol = '.';
-                } else if (cells[r][c] == BLACK) {
-                    symbol = '#';
-                } else {
-                    symbol = (char) ('0' + cells[r][c]);  // число 3 превращаем в символ '3'
+                String text = ".";
+                if (shown[r][c] != 0) {
+                    text = String.valueOf(shown[r][c]);
                 }
-                line = line + symbol + " ";
+                // Дополняем пробелами слева, чтобы столбцы стояли ровно.
+                while (text.length() < width) {
+                    text = " " + text;
+                }
+                line = line + " " + text;
             }
             System.out.println(line);
         }
