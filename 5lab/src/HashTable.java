@@ -177,7 +177,7 @@ public class HashTable {
         int[] oldStates = states;
         int oldSize = size;
 
-        size = nextPrime(oldSize * 2);
+        size = nextPrime(oldSize * 2 + 1);
         keys = new String[size];
         names = new String[size];
         states = new int[size];

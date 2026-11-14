@@ -8,7 +8,7 @@ public class Main {
         System.out.println("Лабораторная № 6. Методы сортировки.");
 
         // Массив с повторами и отрицательными числами.
-        int[] data = {5, -3, 12, 8, 0, 7, 12, -9, 4, 1};
+        int[] data = {5, -3, 12, 8, 0, 7, 12, -9, 4, 1, 45, 12, -99};
 
         System.out.println();
         HeapSort.printArray("Исходный массив", data);
