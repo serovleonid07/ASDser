@@ -15,11 +15,10 @@ import javax.swing.SwingUtilities;
 /*
  * Доп. лабораторная работа № 2. Рекурсия и фракталы.
  * Задача 2. Рекурсивное рисование ёлки.
- * Ёлка рисуется в окне. Управление:
- *   колесо мыши — приближение и отдаление;
- *   стрелки     — сдвиг картинки;
- *   + и -  (или PageUp и PageDown) — глубина рекурсии;
- *   R           — вернуть всё как было.
+ * Ёлка рисуется в окне. Глубина рекурсии меняется так:
+ *   стрелки вверх и вправо, колесо мыши вперёд  — глубина больше;
+ *   стрелки вниз и влево,   колесо мыши назад   — глубина меньше;
+ *   R — вернуть начальную глубину.
  */
 public class Main {
     // Точка входа программы: создаёт окно.
@@ -38,12 +37,8 @@ public class Main {
     static class TreePanel extends JPanel {
         private static final int START_DEPTH = 6;   // начальная глубина рекурсии
         private static final int MAX_DEPTH = 9;     // больше рисовать слишком долго
-        private static final int MOVE_STEP = 30;    // на сколько пикселей двигают стрелки
 
         private int depth = START_DEPTH;  // глубина рекурсии
-        private double zoom = 1.0;        // масштаб (1 — обычный)
-        private double offsetX = 0;       // сдвиг картинки по горизонтали
-        private double offsetY = 0;       // сдвиг картинки по вертикали
 
         // Настраивает панель: размер, цвет фона, реакцию на клавиши и колесо.
         TreePanel() {
@@ -60,41 +55,35 @@ public class Main {
             });
 
             addMouseWheelListener(new MouseWheelListener() {
-                // Вызывается при вращении колеса. Вперёд — приближаем, назад — отдаляем.
+                // Вызывается при вращении колеса. Вперёд (от себя) — глубина больше, назад — меньше.
                 @Override
                 public void mouseWheelMoved(MouseWheelEvent event) {
-                    double factor = Math.pow(1.1, -event.getPreciseWheelRotation());
-                    zoom = zoom * factor;
+                    if (event.getWheelRotation() < 0) {
+                        changeDepth(1);
+                    } else if (event.getWheelRotation() > 0) {
+                        changeDepth(-1);
+                    }
                     repaint();
                 }
             });
         }
 
-        // Меняет состояние (сдвиг, глубина) по коду нажатой клавиши и перерисовывает окно.
+        // Меняет глубину на delta (+1 или -1), но не выходит за границы от 1 до MAX_DEPTH.
+        private void changeDepth(int delta) {
+            int newDepth = depth + delta;
+            if (newDepth >= 1 && newDepth <= MAX_DEPTH) {
+                depth = newDepth;
+            }
+        }
+
+        // Меняет глубину по коду нажатой клавиши и перерисовывает окно.
         private void handleKey(int key) {
-            if (key == KeyEvent.VK_LEFT) {
-                offsetX = offsetX + MOVE_STEP;   // картинка едет влево... вправо на экране
-            } else if (key == KeyEvent.VK_RIGHT) {
-                offsetX = offsetX - MOVE_STEP;
-            } else if (key == KeyEvent.VK_UP) {
-                offsetY = offsetY + MOVE_STEP;
-            } else if (key == KeyEvent.VK_DOWN) {
-                offsetY = offsetY - MOVE_STEP;
-            } else if (key == KeyEvent.VK_PLUS || key == KeyEvent.VK_EQUALS
-                    || key == KeyEvent.VK_ADD || key == KeyEvent.VK_PAGE_UP) {
-                if (depth < MAX_DEPTH) {
-                    depth++;
-                }
-            } else if (key == KeyEvent.VK_MINUS || key == KeyEvent.VK_SUBTRACT
-                    || key == KeyEvent.VK_PAGE_DOWN) {
-                if (depth > 1) {
-                    depth--;
-                }
+            if (key == KeyEvent.VK_UP || key == KeyEvent.VK_RIGHT) {
+                changeDepth(1);
+            } else if (key == KeyEvent.VK_DOWN || key == KeyEvent.VK_LEFT) {
+                changeDepth(-1);
             } else if (key == KeyEvent.VK_R) {
                 depth = START_DEPTH;
-                zoom = 1.0;
-                offsetX = 0;
-                offsetY = 0;
             }
             repaint();
         }
@@ -106,15 +95,14 @@ public class Main {
             Graphics2D g = (Graphics2D) graphics;
             g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
-            // Подсказка в углу (рисуется без масштаба).
+            // Подсказка в углу .
             g.setColor(new Color(20, 60, 20));
             g.setFont(new Font("SansSerif", Font.PLAIN, 14));
-            g.drawString("Глубина: " + depth + "   Масштаб: " + Math.round(zoom * 100) + "%", 12, 22);
-            g.drawString("Колесо мыши — масштаб, стрелки — сдвиг, +/- — глубина, R — сброс", 12, 42);
+            g.drawString("Глубина рекурсии: " + depth + " из " + MAX_DEPTH, 12, 22);
+            g.drawString("Стрелки и колесо мыши — глубина (вверх/вправо — больше, вниз/влево — меньше), R — сброс", 12, 42);
 
-            // Основание ствола ставим внизу по центру, затем применяем сдвиг и масштаб.
-            g.translate(getWidth() / 2.0 + offsetX, getHeight() * 0.95 + offsetY);
-            g.scale(zoom, zoom);
+            // Основание ствола ставим внизу по центру окна.
+            g.translate(getWidth() / 2.0, getHeight() * 0.95);
 
             g.setColor(new Color(10, 100, 20));
             // Рисуем ствол: он растёт вверх (угол 90 градусов) из точки (0, 0).
