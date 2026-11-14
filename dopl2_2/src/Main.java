@@ -15,10 +15,11 @@ import javax.swing.SwingUtilities;
 /*
  * Доп. лабораторная работа № 2. Рекурсия и фракталы.
  * Задача 2. Рекурсивное рисование ёлки.
- * Ёлка рисуется в окне. Глубина рекурсии меняется так:
- *   стрелки вверх и вправо, колесо мыши вперёд  — глубина больше;
- *   стрелки вниз и влево,   колесо мыши назад   — глубина меньше;
- *   R — вернуть начальную глубину.
+ * Ёлка рисуется в окне. Управление:
+ *   колесо мыши — приближение и отдаление;
+ *   стрелки вверх и вправо — глубина рекурсии больше;
+ *   стрелки вниз и влево   — глубина рекурсии меньше;
+ *   R — вернуть начальную глубину и масштаб.
  */
 public class Main {
     // Точка входа программы: создаёт окно.
@@ -39,6 +40,7 @@ public class Main {
         private static final int MAX_DEPTH = 9;     // больше рисовать слишком долго
 
         private int depth = START_DEPTH;  // глубина рекурсии
+        private double zoom = 1.0;        // масштаб (1 — обычный)
 
         // Настраивает панель: размер, цвет фона, реакцию на клавиши и колесо.
         TreePanel() {
@@ -55,14 +57,11 @@ public class Main {
             });
 
             addMouseWheelListener(new MouseWheelListener() {
-                // Вызывается при вращении колеса. Вперёд (от себя) — глубина больше, назад — меньше.
+                // Вызывается при вращении колеса. Вперёд (от себя) — приближаем, назад — отдаляем.
                 @Override
                 public void mouseWheelMoved(MouseWheelEvent event) {
-                    if (event.getWheelRotation() < 0) {
-                        changeDepth(1);
-                    } else if (event.getWheelRotation() > 0) {
-                        changeDepth(-1);
-                    }
+                    double factor = Math.pow(1.1, -event.getPreciseWheelRotation());
+                    zoom = zoom * factor;
                     repaint();
                 }
             });
@@ -84,6 +83,7 @@ public class Main {
                 changeDepth(-1);
             } else if (key == KeyEvent.VK_R) {
                 depth = START_DEPTH;
+                zoom = 1.0;
             }
             repaint();
         }
@@ -98,11 +98,12 @@ public class Main {
             // Подсказка в углу .
             g.setColor(new Color(20, 60, 20));
             g.setFont(new Font("SansSerif", Font.PLAIN, 14));
-            g.drawString("Глубина рекурсии: " + depth + " из " + MAX_DEPTH, 12, 22);
-            g.drawString("Стрелки и колесо мыши — глубина (вверх/вправо — больше, вниз/влево — меньше), R — сброс", 12, 42);
+            g.drawString("Глубина: " + depth + " из " + MAX_DEPTH + "   Масштаб: " + Math.round(zoom * 100) + "%", 12, 22);
+            g.drawString("Колесо мыши — масштаб, стрелки — глубина (вверх/вправо — больше, вниз/влево — меньше), R — сброс", 12, 42);
 
             // Основание ствола ставим внизу по центру окна.
             g.translate(getWidth() / 2.0, getHeight() * 0.95);
+            g.scale(zoom, zoom);  // масштаб относительно основания ствола
 
             g.setColor(new Color(10, 100, 20));
             // Рисуем ствол: он растёт вверх (угол 90 градусов) из точки (0, 0).
